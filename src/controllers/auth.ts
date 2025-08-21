@@ -1,7 +1,7 @@
 // src/controllers/auth.ts
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
-import jwt, { type Secret, type SignOptions, type StringValue } from "jsonwebtoken";
+import jwt, { Secret, SignOptions } from "jsonwebtoken";
 import { z } from "zod";
 import { User } from "../models/User.js";
 import { env } from "../config/env.js";
@@ -30,17 +30,15 @@ function signToken(userId: string, email: string) {
     throw new Error("Missing JWT secret");
   }
 
-  // Render’s TS complained because env.jwtExpiresIn is plain `string`.
-  // Narrow it to `StringValue` which jsonwebtoken expects.
-  const expiresIn: StringValue =
-    ((env.jwtExpiresIn as unknown) as StringValue) || ("7d" as StringValue);
+  // jsonwebtoken expects string | number here
+  const expiresIn = (env.jwtExpiresIn ?? "7d") as string | number;
 
   const options: SignOptions = {
     algorithm: "HS256",
     expiresIn,
   };
 
-  // Standard subject claim
+  // Use standard "sub" (subject) claim
   const payload = { sub: userId, email };
   return jwt.sign(payload, secret, options);
 }
@@ -101,7 +99,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
 export async function me(req: Request, res: Response, next: NextFunction) {
   try {
-    // Your auth middleware should attach req.user = { id, email }
+    // Auth middleware should attach req.user = { id, email }
     const authUser = (req as any).user as
       | { id: string; email: string }
       | undefined;
