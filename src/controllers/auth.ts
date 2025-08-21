@@ -1,7 +1,7 @@
 // src/controllers/auth.ts
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
-import jwt, { type Secret, type SignOptions } from "jsonwebtoken";
+import jwt, { type Secret, type SignOptions, type StringValue } from "jsonwebtoken";
 import { z } from "zod";
 import { User } from "../models/User.js";
 import { env } from "../config/env.js";
@@ -22,7 +22,7 @@ const loginSchema = z.object({
 /* --------------------------- Token Utilities -------------------------- */
 
 function signToken(userId: string, email: string) {
-  // env.jwtSecret should be validated as non-empty in config/env.ts
+  // Ensure a concrete Secret so TS picks the correct jwt.sign overload
   const secret: Secret =
     (env.jwtSecret as unknown as Secret) || (process.env.JWT_SECRET as Secret);
 
@@ -30,12 +30,17 @@ function signToken(userId: string, email: string) {
     throw new Error("Missing JWT secret");
   }
 
+  // Render’s TS complained because env.jwtExpiresIn is plain `string`.
+  // Narrow it to `StringValue` which jsonwebtoken expects.
+  const expiresIn: StringValue =
+    ((env.jwtExpiresIn as unknown) as StringValue) || ("7d" as StringValue);
+
   const options: SignOptions = {
     algorithm: "HS256",
-    expiresIn: env.jwtExpiresIn ?? "7d",
+    expiresIn,
   };
 
-  // Use standard JWT "sub" claim for subject
+  // Standard subject claim
   const payload = { sub: userId, email };
   return jwt.sign(payload, secret, options);
 }
@@ -61,7 +66,9 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors[0]?.message || "Invalid input" });
+      return res
+        .status(400)
+        .json({ error: err.errors[0]?.message || "Invalid input" });
     }
     next(err);
   }
@@ -84,7 +91,9 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ error: err.errors[0]?.message || "Invalid input" });
+      return res
+        .status(400)
+        .json({ error: err.errors[0]?.message || "Invalid input" });
     }
     next(err);
   }
@@ -92,8 +101,10 @@ export async function login(req: Request, res: Response, next: NextFunction) {
 
 export async function me(req: Request, res: Response, next: NextFunction) {
   try {
-    // Auth middleware should attach req.user = { id, email }
-    const authUser = (req as any).user as { id: string; email: string } | undefined;
+    // Your auth middleware should attach req.user = { id, email }
+    const authUser = (req as any).user as
+      | { id: string; email: string }
+      | undefined;
     if (!authUser) return res.status(401).json({ error: "Unauthenticated" });
 
     const user = await User.findById(authUser.id).lean();
