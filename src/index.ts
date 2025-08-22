@@ -4,6 +4,7 @@ import cors from "cors";
 import morgan from "morgan";
 import helmet from "helmet";
 import mongoose from "mongoose";
+import api from "./routes/index.js";
 
 // ---- env
 const PORT = Number(process.env.PORT || 8080);
@@ -16,7 +17,7 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(morgan("dev"));
 
-// ---- CORS (dev-friendly)
+// ---- CORS (dev-friendly) — must be BEFORE routes
 const explicitWhitelist = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
@@ -51,8 +52,7 @@ app.use(express.urlencoded({ extended: true }));
 // ---- health
 app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
-// ---- mount routers
-import authRouter from "./routes/auth";
+// ---- routes (mount AFTER CORS/parsers)
 app.use("/v1/auth", authRouter);
 
 // ---- error handler

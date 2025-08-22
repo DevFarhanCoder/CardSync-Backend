@@ -1,73 +1,20 @@
+// src/routes/auth.ts
 import { Router } from "express";
-import bcrypt from "bcryptjs";
-import jwt, { SignOptions, Secret } from "jsonwebtoken";
-import { User } from "../models/User"; // <-- note the ../ path (we're inside routes/)
+import { register, login, me, logout } from "../controllers/auth.js";
 
-const router = Router();
+const authRouter = Router();
 
-function signToken(id: string) {
-  const secret: Secret = (process.env.JWT_SECRET ?? "devsecret") as Secret;
-  const signOpts: SignOptions = { expiresIn: process.env.JWT_EXPIRES_IN ?? "7d" };
-  return jwt.sign({ id }, secret, signOpts);
-}
+// POST /api/auth/register
+authRouter.post("/register", register);
 
-// POST /v1/auth/register
-router.post("/register", async (req, res) => {
-  try {
-    const { name, email, password } = req.body as {
-      name?: string; email?: string; password?: string;
-    };
+// POST /api/auth/login
+authRouter.post("/login", login);
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: "All fields are required" });
-    }
-    if (password.length < 6) {
-      return res.status(400).json({ error: "Password must be at least 6 characters" });
-    }
+// GET /api/auth/me
+authRouter.get("/me", me);
 
-    const exists = await User.findOne({ email });
-    if (exists) return res.status(400).json({ error: "Email already registered" });
+// POST /api/auth/logout
+authRouter.post("/logout", logout);
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, passwordHash });
-
-    const token = signToken(String(user._id));
-    return res.status(201).json({
-      token,
-      user: { id: user._id, name: user.name, email: user.email },
-    });
-  } catch (err: any) {
-    if (err?.code === 11000) {
-      return res.status(400).json({ error: "Email already registered" });
-    }
-    console.error("Register error:", err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// POST /v1/auth/login
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body as { email?: string; password?: string };
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" });
-    }
-
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ error: "Invalid credentials" });
-
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(400).json({ error: "Invalid credentials" });
-
-    const token = signToken(String(user._id));
-    return res.json({
-      token,
-      user: { id: user._id, name: user.name, email: user.email },
-    });
-  } catch (err) {
-    console.error("Login error:", err);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-export default router;
+export default authRouter;
+export { authRouter };
