@@ -4,8 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Types } from "mongoose";
 
-// NOTE: keep the `.js` extension in ESM imports even in TS.
-// When TS compiles, it outputs JS files ending in .js.
+// Keep the .js extension for ESM output even in TS.
 import { User } from "../models/User.js";
 
 // ---------- Env & helpers ----------
@@ -19,8 +18,6 @@ if (!JWT_SECRET) {
  * Use its declared union type to satisfy TS.
  */
 type JwtExpires = NonNullable<jwt.SignOptions["expiresIn"]>;
-
-// default "7d" if not provided
 const JWT_EXPIRES_IN: JwtExpires =
   (process.env.JWT_EXPIRES_IN as JwtExpires) ?? "7d";
 
@@ -46,8 +43,8 @@ export const register = async (req: Request, res: Response) => {
     return res.status(409).json({ message: "Email already in use" });
   }
 
-  const hash = await bcrypt.hash(password, 10);
-  const user = await User.create({ name, email, password: hash });
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user = await User.create({ name, email, passwordHash });
 
   return res.status(201).json({
     user: { id: user._id, name: user.name, email: user.email },
@@ -61,10 +58,11 @@ export const login = async (req: Request, res: Response) => {
     return res.status(400).json({ message: "email and password required" });
   }
 
-  const user = await User.findOne({ email });
+  // If your schema marks passwordHash with select: false, keep the select("+passwordHash").
+  const user = await User.findOne({ email }).select("+passwordHash");
   if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
-  const ok = await bcrypt.compare(password, user.password);
+  const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
   const token = jwt.sign(
