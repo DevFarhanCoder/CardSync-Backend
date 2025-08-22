@@ -1,43 +1,48 @@
+// src/controllers/auth.ts
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Types } from "mongoose";
 
-// ⬅️ adjust this import if your User model path/name differs
-import { User } from "../models/user.js";
+// NOTE: keep the `.js` extension in ESM imports even in TS.
+// When TS compiles, it outputs JS files ending in .js.
+import { User } from "../models/User.js";
 
-// --- Helpers & env ---
+// ---------- Env & helpers ----------
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is required");
 }
 
-// `jsonwebtoken` allows `expiresIn` to be a string like "7d" or a number (seconds).
+/**
+ * jsonwebtoken accepts "expiresIn" as string (e.g. "7d", "1h") or number (seconds).
+ * Use its declared union type to satisfy TS.
+ */
 type JwtExpires = NonNullable<jwt.SignOptions["expiresIn"]>;
 
-// Allow both "7d" style and seconds as number. Default to "7d".
+// default "7d" if not provided
 const JWT_EXPIRES_IN: JwtExpires =
   (process.env.JWT_EXPIRES_IN as JwtExpires) ?? "7d";
 
-// Cookies require milliseconds as a NUMBER
-const JWT_COOKIE_MAX_AGE_MS: number = Number(
+// Cookie maxAge MUST be a NUMBER (milliseconds)
+const JWT_COOKIE_MAX_AGE_MS = Number(
   process.env.JWT_COOKIE_MAX_AGE_MS ?? 7 * 24 * 60 * 60 * 1000 // 7 days
 );
 
-// --- Controllers ---
+// ---------- Controllers ----------
 export const register = async (req: Request, res: Response) => {
   const { name, email, password } = req.body as {
-    name: string;
-    email: string;
-    password: string;
+    name?: string;
+    email?: string;
+    password?: string;
   };
 
   if (!name || !email || !password) {
     return res.status(400).json({ message: "name, email, password required" });
   }
 
-  const existing = await User.findOne({ email }).lean();
-  if (existing) {
+  const exists = await User.findOne({ email }).lean();
+  if (exists) {
     return res.status(409).json({ message: "Email already in use" });
   }
 
@@ -50,7 +55,11 @@ export const register = async (req: Request, res: Response) => {
 };
 
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body as { email: string; password: string };
+  const { email, password } = req.body as { email?: string; password?: string };
+
+  if (!email || !password) {
+    return res.status(400).json({ message: "email and password required" });
+  }
 
   const user = await User.findOne({ email });
   if (!user) return res.status(401).json({ message: "Invalid credentials" });
@@ -64,7 +73,7 @@ export const login = async (req: Request, res: Response) => {
     { expiresIn: JWT_EXPIRES_IN }
   );
 
-  // send as cookie (optional) + in body
+  // Optionally set a cookie as well as returning the token in JSON
   res.cookie("token", token, {
     httpOnly: true,
     sameSite: "lax",
@@ -79,7 +88,7 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const me = async (req: Request, res: Response) => {
-  // assumes you set `req.userId` in an auth middleware from the Bearer token
+  // Assuming an auth middleware that sets req.userId from Bearer token
   const userId = (req as any).userId as string | undefined;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
