@@ -4,6 +4,7 @@ import cors from "cors";
 import morgan from "morgan";
 import helmet from "helmet";
 import mongoose from "mongoose";
+import authRouter from "./routes/auth";
 
 // ---- env
 const PORT = Number(process.env.PORT || 8080);
@@ -15,6 +16,7 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || "").trim();
 const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(morgan("dev"));
+app.use("/v1/auth", authRouter);
 
 // ---- CORS (dev-friendly)
 const explicitWhitelist = [
