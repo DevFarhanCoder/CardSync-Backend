@@ -40,7 +40,7 @@ export async function updateCard(req: Request & { user?: { id: string } }, res: 
   const card = await Card.findOneAndUpdate(
     { _id: req.params.id, userId: req.user!.id },
     payload,
-    { new: True }
+    { new: true }
   ).lean();
   if (!card) return res.status(404).json({ error: 'Not found' });
   if (payload.isDefault === true) {
