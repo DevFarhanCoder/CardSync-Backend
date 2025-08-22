@@ -1,14 +1,15 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import jwt, { SignOptions, Secret } from "jsonwebtoken";
+import jwt, { type SignOptions, type Secret, type StringValue } from "jsonwebtoken";
 import { User } from "../models/User"; // <-- note the ../ path (we're inside routes/)
 
 const router = Router();
 
 function signToken(id: string) {
-  const secret: Secret = (process.env.JWT_SECRET ?? "devsecret") as Secret;
-  const signOpts: SignOptions = { expiresIn: process.env.JWT_EXPIRES_IN ?? "7d" };
-  return jwt.sign({ id }, secret, signOpts);
+  const secret = (process.env.JWT_SECRET ?? "devsecret") as Secret;
+  const expiresIn = (process.env.JWT_EXPIRES_IN ?? "7d") as StringValue; // <-- key change
+  const opts: SignOptions = { expiresIn };
+  return jwt.sign({ id }, secret, opts);
 }
 
 // POST /v1/auth/register
