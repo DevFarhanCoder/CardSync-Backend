@@ -4,7 +4,7 @@ import cors from "cors";
 import morgan from "morgan";
 import helmet from "helmet";
 import mongoose from "mongoose";
-import api from "./routes/index.js";
+import authRouter from "./routes/auth.js";
 
 // ---- env
 const PORT = Number(process.env.PORT || 8080);
