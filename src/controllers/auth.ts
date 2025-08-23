@@ -1,104 +1,70 @@
 // src/controllers/auth.ts
-import type { Request, Response } from "express";
-import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { Types } from "mongoose";
+import bcrypt from "bcryptjs";
+import { Request, Response } from "express";
+import { User } from "../models/user.js";
 
-// Keep the .js extension for ESM output even in TS.
-import { User } from "../models/User.js";
+const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
-// ---------- Env & helpers ----------
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is required");
+function signToken(user: { _id: string; email: string }) {
+  return jwt.sign({ _id: user._id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
 }
 
-/**
- * jsonwebtoken accepts "expiresIn" as string (e.g. "7d", "1h") or number (seconds).
- * Use its declared union type to satisfy TS.
- */
-type JwtExpires = NonNullable<jwt.SignOptions["expiresIn"]>;
-const JWT_EXPIRES_IN: JwtExpires =
-  (process.env.JWT_EXPIRES_IN as JwtExpires) ?? "7d";
+/** POST /api/auth/login  Body: { email, password } */
+export async function login(req: Request, res: Response) {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
 
-// Cookie maxAge MUST be a NUMBER (milliseconds)
-const JWT_COOKIE_MAX_AGE_MS = Number(
-  process.env.JWT_COOKIE_MAX_AGE_MS ?? 7 * 24 * 60 * 60 * 1000 // 7 days
-);
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
+    if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
-// ---------- Controllers ----------
-export const register = async (req: Request, res: Response) => {
-  const { name, email, password } = req.body as {
-    name?: string;
-    email?: string;
-    password?: string;
-  };
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
-  if (!name || !email || !password) {
-    return res.status(400).json({ message: "name, email, password required" });
+    const token = signToken({ _id: user._id.toString(), email: user.email });
+    return res.json({
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        name: user.name,
+        headline: user.headline,
+        company: user.company,
+        location: user.location,
+        defaultCardId: user.defaultCardId,
+      },
+    });
+  } catch (err) {
+    console.error("login error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
+}
 
-  const exists = await User.findOne({ email }).lean();
-  if (exists) {
-    return res.status(409).json({ message: "Email already in use" });
+/** POST /api/auth/register  Body: { name, email, password }  (dev seeding) */
+export async function register(req: Request, res: Response) {
+  try {
+    const { name, email, password } = req.body || {};
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email, password required" });
+    }
+
+    const normalized = String(email).toLowerCase().trim();
+    const existing = await User.findOne({ email: normalized });
+    if (existing) return res.status(409).json({ message: "User already exists" });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({ name, email: normalized, passwordHash });
+
+    const token = signToken({ _id: user._id.toString(), email: user.email });
+    return res.status(201).json({
+      token,
+      user: { _id: user._id, email: user.email, name: user.name },
+    });
+  } catch (err) {
+    console.error("register error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const user = await User.create({ name, email, passwordHash });
-
-  return res.status(201).json({
-    user: { id: user._id, name: user.name, email: user.email },
-  });
-};
-
-export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body as { email?: string; password?: string };
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "email and password required" });
-  }
-
-  // If your schema marks passwordHash with select: false, keep the select("+passwordHash").
-  const user = await User.findOne({ email }).select("+passwordHash");
-  if (!user) return res.status(401).json({ message: "Invalid credentials" });
-
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return res.status(401).json({ message: "Invalid credentials" });
-
-  const token = jwt.sign(
-    { sub: (user._id as Types.ObjectId).toString() },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
-  );
-
-  // Optionally set a cookie as well as returning the token in JSON
-  res.cookie("token", token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: JWT_COOKIE_MAX_AGE_MS, // <-- NUMBER, not string
-  });
-
-  return res.status(200).json({
-    token,
-    user: { id: user._id, name: user.name, email: user.email },
-  });
-};
-
-export const me = async (req: Request, res: Response) => {
-  // Assuming an auth middleware that sets req.userId from Bearer token
-  const userId = (req as any).userId as string | undefined;
-  if (!userId) return res.status(401).json({ message: "Unauthorized" });
-
-  const user = await User.findById(userId).lean();
-  if (!user) return res.status(404).json({ message: "User not found" });
-
-  return res.status(200).json({
-    user: { id: user._id, name: user.name, email: user.email },
-  });
-};
-
-export const logout = (_req: Request, res: Response) => {
-  res.clearCookie("token");
-  return res.status(200).json({ message: "Logged out" });
-};
+}

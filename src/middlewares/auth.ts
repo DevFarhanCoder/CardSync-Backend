@@ -1,20 +1,23 @@
-import type { NextFunction, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-import { env } from '../config/env.js';
+// src/middlewares/auth.ts
+import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
+
+const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
 export interface AuthedRequest extends Request {
-  user?: { id: string; email: string };
+  user?: { _id: string; email: string };
 }
 
 export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
-  const auth = req.headers.authorization || '';
-  const [, token] = auth.split(' ');
-  if (!token) return res.status(401).json({ error: 'Missing Authorization Bearer token' });
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) return res.status(401).json({ message: "Missing token" });
+
   try {
-    const decoded = jwt.verify(token, env.jwtSecret) as any;
-    req.user = { id: decoded.id, email: decoded.email };
+    const payload = jwt.verify(token, JWT_SECRET) as { _id: string; email: string };
+    req.user = { _id: payload._id, email: payload.email }; // <-- use _id and email keys from payload
     next();
   } catch {
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ message: "Invalid token" });
   }
 }

@@ -1,85 +1,91 @@
+// src/index.ts
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import morgan from "morgan";
-import helmet from "helmet";
 import mongoose from "mongoose";
-import authRouter from "./routes/auth.js";
 
-// ---- env
+// ---- Validate essential env (optional but helpful) ----
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/test";
 const PORT = Number(process.env.PORT || 8080);
-const MONGODB_URI = process.env.MONGODB_URI || "";
-if (!MONGODB_URI) console.warn("[WARN] MONGODB_URI missing in environment.");
-const FRONTEND_URL = (process.env.FRONTEND_URL || "").trim();
 
-// ---- app
+// ---- Connect MongoDB ----
+mongoose.set("strictQuery", true);
+mongoose
+  .connect(MONGODB_URI)
+  .then(() => console.log("[db] connected"))
+  .catch((e) => {
+    console.error("[db] connection error", e);
+    process.exit(1);
+  });
+
+// Helpful connection logs
+mongoose.connection.on("error", (err) => console.error("[db] error:", err));
+mongoose.connection.on("disconnected", () => console.warn("[db] disconnected"));
+
+// ---- App bootstrap ----
 const app = express();
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+
+// If you run behind a proxy (nginx/heroku), uncomment:
+// app.set("trust proxy", 1);
+
+// CORS (adjust origins as needed)
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ],
+    credentials: false,
+  })
+);
+
+// Parsers & logs
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(morgan("dev"));
 
-// ---- CORS (dev-friendly) — must be BEFORE routes
-const explicitWhitelist = [
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  FRONTEND_URL,
-].filter(Boolean);
+// ---- Routers ----
+// NOTE: Keep the .js extensions if your compiled output uses .js.
+// If working purely in TS with ts-node, you can omit .js in imports.
+import authRouter from "./routes/auth.js";
+import cardsRouter from "./routes/cards.js";
+import analyticsRouter from "./routes/analytics.js";
 
-const corsOptions: cors.CorsOptions = {
-  origin(origin, cb) {
-    if (!origin) return cb(null, true); // allow server-to-server/no-Origin
-    const isLocalhost =
-      process.env.NODE_ENV !== "production" &&
-      (/^http:\/\/localhost:\d+$/i.test(origin) ||
-        /^http:\/\/127\.0\.0\.1:\d+$/i.test(origin));
-    if (isLocalhost || explicitWhitelist.includes(origin)) return cb(null, true);
-    console.warn("[CORS] Blocked origin:", origin);
-    return cb(new Error("Not allowed by CORS"));
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: false,
-  maxAge: 86400,
-};
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.use("/api/auth", authRouter);
+app.use("/api/cards", cardsRouter);
+app.use("/v1/analytics", analyticsRouter);
 
-// ---- parsers
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true }));
+// ---- Health ----
+app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
-// ---- health
-app.get("/health", (_req: Request, res: Response) => res.json({ ok: true }));
-
-// ---- routes (mount AFTER CORS/parsers)
-app.use("/v1/auth", authRouter);
-
-// ---- error handler
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("[ERROR] UnhandledError", err);
-  if (err?.message === "Not allowed by CORS") {
-    return res.status(403).json({ error: "CORS: origin not allowed" });
-  }
-  res.status(err?.status || 500).json({
-    error:
-      process.env.NODE_ENV === "production"
-        ? "Server error"
-        : err?.message || "Server error",
-  });
+// ---- 404 handler (after all routes) ----
+app.use((req: Request, res: Response) => {
+  return res.status(404).json({ message: "Not Found" });
 });
 
-// ---- start
-async function start() {
-  try {
-    await mongoose.connect(MONGODB_URI);
-    console.log("[INFO] Connected to MongoDB");
-    app.listen(PORT, () =>
-      console.log(`[INFO] API listening on :${PORT} (${process.env.NODE_ENV || "development"})`)
-    );
-  } catch (e) {
-    console.error("[FATAL] Failed to start server:", e);
-    process.exit(1);
-  }
+// ---- Error handler ----
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[server] error:", err);
+  const status = err?.status || 500;
+  const msg = status >= 500 ? "Server error" : err?.message || "Request failed";
+  res.status(status).json({ message: msg });
+});
+
+// ---- Server start + graceful shutdown ----
+const server = app.listen(PORT, () =>
+  console.log(`[server] http://localhost:${PORT}`)
+);
+
+function shutdown(signal: string) {
+  console.log(`[server] ${signal} received, shutting down...`);
+  server.close(() => {
+    mongoose.connection.close(false).then(() => {
+      console.log("[db] closed");
+      process.exit(0);
+    });
+  });
 }
-start();
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

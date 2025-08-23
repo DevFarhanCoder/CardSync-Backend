@@ -1,10 +1,32 @@
-import { Router } from 'express';
-import { requireAuth } from '../middlewares/auth.js';
-import { listCards, createCard, getCard, updateCard, deleteCard } from '../controllers/cards.js';
+// src/routes/cards.ts
+import { Router } from "express";
+import {
+  createCard,
+  listCards,
+  getOneCard,
+  updateCard,
+  deleteCard,
+  publishPublic,
+  unpublish,
+  incrementView,
+  searchPublic,
+} from "../controllers/cards.js";
+import { requireAuth } from "../middlewares/auth.js";
 
-export const cardsRouter = Router();
-cardsRouter.get('/', requireAuth, listCards);
-cardsRouter.post('/', requireAuth, createCard);
-cardsRouter.get('/:id', requireAuth, getCard);
-cardsRouter.put('/:id', requireAuth, updateCard);
-cardsRouter.delete('/:id', requireAuth, deleteCard);
+const router = Router();
+
+// PUBLIC
+router.get("/search", searchPublic);
+
+// AUTHED
+router.use(requireAuth);
+router.get("/", listCards);
+router.get("/:id", getOneCard);
+router.post("/", createCard);
+router.patch("/:id", updateCard);
+router.delete("/:id", deleteCard);
+router.post("/publish/:id?", publishPublic);
+router.post("/unpublish/:id?", unpublish);
+router.post("/:id/view", incrementView);
+
+export default router;
