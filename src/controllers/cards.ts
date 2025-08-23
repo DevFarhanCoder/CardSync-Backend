@@ -1,7 +1,7 @@
 // src/controllers/cards.ts
 import { Request, Response } from "express";
 import mongoose from "mongoose";
-import Card from "../models/card.js";
+import Card from "../models/Card.js";
 
 // If you typed your auth middleware, this matches: req.user._id is set when authed
 type AuthedRequest = Request & { user?: { _id: string; email?: string } };
