@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { User } from '../models/User.js';
+import User from '../models/User.js';
 
 const profileSchema = z.object({
   name: z.string().min(1).optional(),
