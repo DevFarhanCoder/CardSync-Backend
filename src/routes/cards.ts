@@ -1,32 +1,16 @@
-// src/routes/cards.ts
 import { Router } from "express";
-import {
-  createCard,
-  listCards,
-  getOneCard,
-  updateCard,
-  deleteCard,
-  publishPublic,
-  unpublish,
-  incrementView,
-  searchPublic,
-} from "../controllers/cards.js";
+import { createCard, updateCard, getCardById, searchPublic, getPublicCards } from "../controllers/cards.js";
 import { requireAuth } from "../middlewares/auth.js";
 
 const router = Router();
 
-// PUBLIC
-router.get("/search", searchPublic);
+/** Owner CRUD */
+router.post("/cards", requireAuth, createCard);
+router.put("/cards/:id", requireAuth, updateCard);
+router.get("/cards/:id", requireAuth, getCardById);
 
-// AUTHED
-router.use(requireAuth);
-router.get("/", listCards);
-router.get("/:id", getOneCard);
-router.post("/", createCard);
-router.patch("/:id", updateCard);
-router.delete("/:id", deleteCard);
-router.post("/publish/:id?", publishPublic);
-router.post("/unpublish/:id?", unpublish);
-router.post("/:id/view", incrementView);
+/** Public endpoints */
+router.get("/explore", searchPublic);
+router.get("/public/profile/:owner/cards", getPublicCards);
 
 export default router;

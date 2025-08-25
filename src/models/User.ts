@@ -1,14 +1,18 @@
-import mongoose from 'mongoose';
+import mongoose, { Schema, Document } from "mongoose";
 
-const UserSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, index: true },
-  passwordHash: { type: String, required: true },
-  headline: String,
-  bio: String,
-  company: String,
-  location: String,
-  defaultCardId: { type: mongoose.Schema.Types.ObjectId, ref: 'Card' },
-}, { timestamps: true });
+export interface IUser extends Document {
+  email: string;
+  name?: string;
+  passwordHash?: string; // bcrypt hash (select:false)
+}
 
-export const User = mongoose.model('User', UserSchema);
+const UserSchema = new Schema<IUser>(
+  {
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+    name: { type: String, default: "" },
+    passwordHash: { type: String, select: false },
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model<IUser>("User", UserSchema);

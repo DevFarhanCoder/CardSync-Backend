@@ -1,70 +1,60 @@
-// src/controllers/auth.ts
-import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
-import { User } from "../models/User.js";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import User from "../models/User.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
+const JWT_SECRET = process.env.JWT_SECRET || "dev_change_me";
+const JWT_EXPIRES_IN = "30d";
+const normalizeEmail = (s: string) => String(s || "").trim().toLowerCase();
 
-function signToken(user: { _id: string; email: string }) {
-  return jwt.sign({ _id: user._id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-}
-
-/** POST /api/auth/login  Body: { email, password } */
-export async function login(req: Request, res: Response) {
+export async function signup(req: Request, res: Response) {
   try {
-    const { email, password } = req.body || {};
+    const email = normalizeEmail(req.body?.email);
+    const password = String(req.body?.password || "");
+    const name = String(req.body?.name || "");
+
     if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required" });
+      return res.status(400).json({ message: "Email and password required" });
     }
+    const exists = await User.findOne({ email }).lean();
+    if (exists) return res.status(409).json({ message: "Email already in use" });
 
-    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
-    if (!user) return res.status(401).json({ message: "Invalid credentials" });
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({ email, name, passwordHash });
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
-
-    const token = signToken({ _id: user._id.toString(), email: user.email });
-    return res.json({
-      token,
-      user: {
-        _id: user._id,
-        email: user.email,
-        name: user.name,
-        headline: user.headline,
-        company: user.company,
-        location: user.location,
-        defaultCardId: user.defaultCardId,
-      },
-    });
+    const token = jwt.sign({ _id: String(user._id), email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    return res.status(201).json({ token, user: { _id: String(user._id), email, name } });
   } catch (err) {
-    console.error("login error:", err);
+    console.error("signup error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }
 
-/** POST /api/auth/register  Body: { name, email, password }  (dev seeding) */
-export async function register(req: Request, res: Response) {
+export async function login(req: Request, res: Response) {
   try {
-    const { name, email, password } = req.body || {};
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Name, email, password required" });
+    const email = normalizeEmail(req.body?.email);
+    const password = String(req.body?.password || "");
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password required" });
     }
 
-    const normalized = String(email).toLowerCase().trim();
-    const existing = await User.findOne({ email: normalized });
-    if (existing) return res.status(409).json({ message: "User already exists" });
+    const user = await (User as any)
+      .findOne({ email })
+      .select("+passwordHash name email")
+      .lean(false);
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email: normalized, passwordHash });
+    if (!user || !user.passwordHash) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-    const token = signToken({ _id: user._id.toString(), email: user.email });
-    return res.status(201).json({
-      token,
-      user: { _id: user._id, email: user.email, name: user.name },
-    });
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
+
+    const token = jwt.sign({ _id: String(user._id), email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    return res.json({ token, user: { _id: String(user._id), email: user.email, name: user.name || "" } });
   } catch (err) {
-    console.error("register error:", err);
+    console.error("login error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }

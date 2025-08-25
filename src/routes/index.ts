@@ -1,10 +1,14 @@
-// src/routes/index.ts
 import { Router } from "express";
+import cardsRouter from "./cards.js";
 import authRouter from "./auth.js";
+import analyticsRouter from "./analytics.js";
 
-const api = Router();
+const router = Router();
 
-api.use("/auth", authRouter);
+router.use("/auth", authRouter);
+router.use("/analytics", analyticsRouter);
 
-export default api;
-export { api };
+// Cards + explore + public profile
+router.use("/", cardsRouter);
+
+export default router;
