@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
+
 const JWT_SECRET = process.env.JWT_SECRET || "dev_change_me";
 
 export type Authed = Request & { user?: { _id: string; email?: string } };
@@ -20,3 +21,9 @@ export function requireAuth(req: Authed, res: Response, next: NextFunction) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 }
+
+
+export interface AuthedRequest extends Request {
+  user?: { id: string; email?: string };
+}
+
