@@ -1,15 +1,18 @@
-import { Request, Response, NextFunction } from "express";
+// src/controllers/auth.ts
+import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import jwt, { type Secret, type SignOptions } from "jsonwebtoken";
 import User from "../models/User.js";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev_change_me";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "30d";
+// --- JWT config (typed for jsonwebtoken v9)
+const JWT_SECRET: Secret = (process.env.JWT_SECRET || "dev_change_me") as Secret;
+const JWT_EXPIRES_IN: SignOptions["expiresIn"] = (process.env.JWT_EXPIRES_IN || "30d") as SignOptions["expiresIn"];
 
 const normalizeEmail = (s: string) => String(s || "").trim().toLowerCase();
 
 /**
  * POST /api/auth/signup
+ * body: { email, password, name? }
  */
 export async function signup(req: Request, res: Response) {
   try {
@@ -29,9 +32,11 @@ export async function signup(req: Request, res: Response) {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({ email, name, passwordHash });
 
-    const token = jwt.sign({ _id: String(user._id), email }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-    });
+    const token = jwt.sign(
+      { _id: String(user._id), email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
 
     return res.status(201).json({
       token,
@@ -45,8 +50,9 @@ export async function signup(req: Request, res: Response) {
 
 /**
  * POST /api/auth/login
+ * body: { email, password }
  */
-export async function login(req: Request, res: Response, next: NextFunction) {
+export async function login(req: Request, res: Response, _next: NextFunction) {
   try {
     const email = normalizeEmail(req.body?.email);
     const password = String(req.body?.password || "");
@@ -69,13 +75,11 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    if (!JWT_SECRET) {
-      throw new Error("JWT_SECRET is not set in environment");
-    }
-
-    const token = jwt.sign({ _id: String(user._id), email: user.email }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-    });
+    const token = jwt.sign(
+      { _id: String(user._id), email: user.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
 
     return res.json({
       token,
