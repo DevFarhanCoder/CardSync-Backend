@@ -1,8 +1,9 @@
 // src/routes/analytics.ts
+// src/routes/analytics.ts
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth";
-import { ViewEvent, ShareEvent, Connection } from "../models/Analytics";
-import Card from "../models/Card";
+import { requireAuth } from "../middlewares/auth.js";
+import { ViewEvent, ShareEvent, Connection } from "../models/index.js";
+import Card from "../models/Card.js";
 
 
 const router = Router();
