@@ -4,16 +4,13 @@ import bcrypt from "bcryptjs";
 import jwt, { type Secret, type SignOptions } from "jsonwebtoken";
 import User from "../models/User.js";
 
-// --- JWT config (typed for jsonwebtoken v9)
 const JWT_SECRET: Secret = (process.env.JWT_SECRET || "dev_change_me") as Secret;
-const JWT_EXPIRES_IN: SignOptions["expiresIn"] = (process.env.JWT_EXPIRES_IN || "30d") as SignOptions["expiresIn"];
+const JWT_EXPIRES_IN: SignOptions["expiresIn"] =
+  (process.env.JWT_EXPIRES_IN || "30d") as SignOptions["expiresIn"];
 
 const normalizeEmail = (s: string) => String(s || "").trim().toLowerCase();
 
-/**
- * POST /api/auth/signup
- * body: { email, password, name? }
- */
+/** POST /api/auth/signup  body: { email, password, name? } */
 export async function signup(req: Request, res: Response) {
   try {
     const email = normalizeEmail(req.body?.email);
@@ -25,18 +22,14 @@ export async function signup(req: Request, res: Response) {
     }
 
     const exists = await User.findOne({ email }).lean();
-    if (exists) {
-      return res.status(409).json({ message: "Email already in use" });
-    }
+    if (exists) return res.status(409).json({ message: "Email already in use" });
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({ email, name, passwordHash });
 
-    const token = jwt.sign(
-      { _id: String(user._id), email },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
-    );
+    const token = jwt.sign({ _id: String(user._id), email }, JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN,
+    });
 
     return res.status(201).json({
       token,
@@ -48,10 +41,7 @@ export async function signup(req: Request, res: Response) {
   }
 }
 
-/**
- * POST /api/auth/login
- * body: { email, password }
- */
+/** POST /api/auth/login  body: { email, password } */
 export async function login(req: Request, res: Response, _next: NextFunction) {
   try {
     const email = normalizeEmail(req.body?.email);
@@ -62,8 +52,8 @@ export async function login(req: Request, res: Response, _next: NextFunction) {
     }
 
     const user = await User.findOne({ email })
-      .select("+passwordHash")
-      .select("name email")
+      .select("+passwordHash")      // include the hashed password
+      .select("name email")         // include public fields
       .exec();
 
     if (!user || !user.passwordHash) {
@@ -71,9 +61,7 @@ export async function login(req: Request, res: Response, _next: NextFunction) {
     }
 
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
     const token = jwt.sign(
       { _id: String(user._id), email: user.email },
