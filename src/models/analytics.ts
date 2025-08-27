@@ -1,3 +1,3 @@
-export { default as ViewEvent } from "./ViewEvent";
-export { default as ShareEvent } from "./ShareEvent";
-export { default as Connection } from "./Connection";
+export { default as ViewEvent } from "./ViewEvent.js";
+export { default as ShareEvent } from "./ShareEvent.js";
+export { default as Connection } from "./Connection.js";
