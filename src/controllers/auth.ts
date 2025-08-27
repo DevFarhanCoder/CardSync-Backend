@@ -39,10 +39,11 @@ export async function login(req: Request, res: Response) {
       return res.status(400).json({ message: "Email and password required" });
     }
 
-    const user = await (User as any)
-      .findOne({ email })
-      .select("+passwordHash name email")
-      .lean(false);
+const user = await User.findOne({ email })
+  .select("+passwordHash name email")
+  .lean(false)
+  .exec();
+
 
     if (!user || !user.passwordHash) {
       return res.status(401).json({ message: "Invalid credentials" });
