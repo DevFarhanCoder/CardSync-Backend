@@ -1,250 +1,219 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import mongoose from "mongoose";
 import Card, { ICard } from "../models/Card.js";
-import User from "../models/User.js";
 
-
-// If auth middleware adds req.user
+/** If auth middleware adds req.user */
 type AuthedRequest = Request & { user?: { _id: string; email?: string } };
 
-// ---------- helpers ----------
-const normalizeList = (input: any): string[] => {
-  const arr = Array.isArray(input) ? input : String(input || "").split(",");
-  return arr.map((s) => String(s || "").trim().toLowerCase()).filter(Boolean).slice(0, 50);
-};
-
-// Build a public-safe card payload
-const sanitize = (doc: ICard) => {
-  const d: any = (doc as any).data || {};
-  const previewUrl =
-    d.previewUrl || d.image || d.photo || d.photoUrl || d.logo || d.cover || d.avatar || null;
-
-  return {
-    _id: String((doc as any)._id),
-    owner: String((doc as any).owner),
-    title: (doc as any).title,
-    slug: (doc as any).slug,
-    theme: (doc as any).theme,
-    isPublic: (doc as any).isPublic,
-    data: d,
-    tagline: d.tagline,
-    website: d.website,
-    socials: d.socials || {},
-    keywords: (doc as any).keywords || [],
-    tags: (doc as any).tags || [],
-    analytics: (doc as any).analytics || { views: 0, clicks: 0, shares: 0, saves: 0 },
-    previewUrl,
-  };
-};
+const FRONTEND_ORIGIN =
+  process.env.FRONTEND_ORIGIN ||
+  process.env.PUBLIC_APP_ORIGIN ||
+  "http://localhost:3000";
 
 function slugify(s: string) {
-  return s.toLowerCase().trim().replace(/['"]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  const base = (s || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+  const rand = Math.random().toString(36).slice(2, 6);
+  return `${base || "card"}-${rand}`;
 }
-async function nextUniqueSlug(base: string) {
-  const candidate = base || "card";
-  for (let i = 0; i < 50; i++) {
-    const slug = i === 0 ? candidate : `${candidate}-${i + 1}`;
-    const exists = await Card.exists({ slug });
-    if (!exists) return slug;
+
+function tokensFrom(title?: string, list: string[] = []) {
+  const out = new Set<string>();
+  const t = (title || "").toLowerCase().trim();
+  if (t) {
+    const parts = t.split(/\s+/).filter(Boolean);
+    for (const p of parts) {
+      for (let i = 1; i <= Math.min(p.length, 20); i++) out.add(p.slice(0, i));
+      out.add(p);
+    }
   }
-  return `${candidate}-${Date.now()}`;
+  (list || [])
+    .map((x) => (x || "").toLowerCase().trim())
+    .filter(Boolean)
+    .forEach((x) => out.add(x));
+  return Array.from(out);
 }
 
-// Pick a nice display name from a User doc and/or cards
-function pickDisplayName(owner: any, cards: ICard[]): string {
-  const userName =
-    owner?.name ||
-    owner?.fullName ||
-    [owner?.firstName, owner?.lastName].filter(Boolean).join(" ") ||
-    (owner?.email ? String(owner.email).split("@")[0] : "");
-
-  if (userName) return userName;
-
-  // try to derive from first public card
-  const first = cards[0] as any;
-  const fromCard = first?.data?.name || first?.title;
-  return fromCard || "Unknown User";
+function sanitize(doc: ICard) {
+  const json = doc.toObject({ getters: true, virtuals: false });
+  delete json.__v;
+  return {
+    _id: String(json._id),
+    title: json.title,
+    slug: json.slug,
+    theme: json.theme,
+    isPublic: !!json.isPublic,
+    ownerId: String(json.ownerId),
+    data: json.data || {},
+    keywords: json.keywords || [],
+    tags: json.tags || [],
+    analytics: json.analytics || { views: 0, clicks: 0, shares: 0, saves: 0 },
+    createdAt: json.createdAt,
+    updatedAt: json.updatedAt,
+  };
 }
 
-// ---------- controllers ----------
-
-/** POST /api/cards — create */
+/** POST /api/cards  (protected) */
 export async function createCard(req: AuthedRequest, res: Response) {
   try {
-    const owner = req.user?._id;
-    if (!owner) return res.status(401).json({ message: "Unauthorized" });
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const ownerObjId = new mongoose.Types.ObjectId(owner);
-    const { title, slug, theme = "luxe", data = {}, keywords = [], tags = [], isPublic = true } = req.body;
-    if (!title) return res.status(400).json({ message: "title is required" });
+    const {
+      title = "Untitled",
+      theme = "luxe",
+      data = {},
+      keywords = [],
+      tags = [],
+      isPublic = false,
+    } = (req.body || {}) as Partial<ICard> & { data?: any };
 
-    const base = slugify(slug || title);
-    const uniqueSlug = await nextUniqueSlug(base);
-
-    const kwFromData = (data as any)?.keywords;
-    const normalizedKeywords = normalizeList(
-      Array.isArray(keywords) || typeof keywords === "string" ? keywords : kwFromData
-    );
-
+    const slug = slugify(String(title));
     const doc = await Card.create({
       title,
-      slug: uniqueSlug,
-      owner: ownerObjId,
+      slug,
+      ownerId: new mongoose.Types.ObjectId(String(userId)),
       theme,
-      data,
-      isPublic,
-      keywords: normalizedKeywords,
-      tags: normalizeList(tags),
+      isPublic: !!isPublic,
+      data, // ← includes extra.personal / extra.company from the new form
+      keywords: tokensFrom(title, keywords as string[]),
+      tags,
     });
 
-    return res.status(201).json(sanitize(doc));
+    return res.status(201).json({ card: sanitize(doc) });
   } catch (err) {
     console.error("createCard error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }
 
-/** PUT /api/cards/:id — update */
+/** PUT /api/cards/:id  (protected) */
 export async function updateCard(req: AuthedRequest, res: Response) {
   try {
-    const owner = req.user?._id;
-    if (!owner) return res.status(401).json({ message: "Unauthorized" });
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const cardId = req.params.id;
-    if (!mongoose.isValidObjectId(cardId)) return res.status(400).json({ message: "Invalid id" });
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id))
+      return res.status(400).json({ message: "Invalid id" });
 
-    const { title, theme, data, keywords, tags, isPublic, slug } = req.body;
-
-    const $set: any = {};
-    if (title !== undefined) $set.title = title;
-    if (theme !== undefined) $set.theme = theme;
-    if (data !== undefined) $set.data = data;
-    if (isPublic !== undefined) $set.isPublic = !!isPublic;
-    if (keywords !== undefined || data?.keywords !== undefined) {
-      const kw = Array.isArray(keywords) || typeof keywords === "string" ? keywords : data.keywords;
-      $set.keywords = normalizeList(kw);
+    const body = req.body || {};
+    const update: any = {};
+    if (typeof body.title === "string") {
+      update.title = body.title;
+      update.keywords = tokensFrom(body.title, body.keywords || []);
     }
-    if (tags !== undefined) $set.tags = normalizeList(tags);
-    if (slug !== undefined) {
-      const base = slugify(slug || title || "");
-      $set.slug = await nextUniqueSlug(base);
-    }
+    if (typeof body.theme === "string") update.theme = body.theme;
+    if (typeof body.isPublic === "boolean") update.isPublic = body.isPublic;
+    if (body.data && typeof body.data === "object") update.data = body.data;
+    if (Array.isArray(body.tags)) update.tags = body.tags;
 
     const doc = await Card.findOneAndUpdate(
-      { _id: cardId, owner: new mongoose.Types.ObjectId(owner) },
-      { $set },
+      { _id: id, ownerId: userId },
+      { $set: update },
       { new: true }
     );
     if (!doc) return res.status(404).json({ message: "Not found" });
 
-    return res.json(sanitize(doc));
+    return res.json({ card: sanitize(doc) });
   } catch (err) {
     console.error("updateCard error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }
 
-/** GET /api/cards/:id — owner fetch */
+/** GET /api/cards/:id  (protected) */
 export async function getCardById(req: AuthedRequest, res: Response) {
   try {
-    const owner = req.user?._id;
-    if (!owner) return res.status(401).json({ message: "Unauthorized" });
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const cardId = req.params.id;
-    if (!mongoose.isValidObjectId(cardId)) return res.status(400).json({ message: "Invalid id" });
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id))
+      return res.status(400).json({ message: "Invalid id" });
 
-    const doc = await Card.findOne({ _id: cardId, owner: new mongoose.Types.ObjectId(owner) });
+    const doc = await Card.findOne({ _id: id, ownerId: userId });
     if (!doc) return res.status(404).json({ message: "Not found" });
 
-    return res.json(sanitize(doc));
+    return res.json({ card: sanitize(doc) });
   } catch (err) {
     console.error("getCardById error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }
 
-/** GET /api/explore?q=... — public search with owner + category */
+/** POST /api/cards/:id/share  (protected) -> returns a public share URL */
+export async function shareCardLink(req: AuthedRequest, res: Response) {
+  try {
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id))
+      return res.status(400).json({ message: "Invalid id" });
+
+    const doc = await Card.findOneAndUpdate(
+      { _id: id, ownerId: userId },
+      { $set: { isPublic: true } },
+      { new: true }
+    );
+    if (!doc) return res.status(404).json({ message: "Not found" });
+
+    // Match the frontend route you already use
+    const shareUrl = `${FRONTEND_ORIGIN}/share/${id}`;
+
+    return res.json({ shareUrl, card: sanitize(doc) });
+  } catch (err) {
+    console.error("shareCardLink error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+/** GET /api/explore?q=...  (public) */
 export async function searchPublic(req: Request, res: Response) {
   try {
     const q = String((req.query.q as string) || "").trim();
-    const limit = Math.min(Number(req.query.limit) || 24, 60);
-    const base = { isPublic: true };
+    const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || "12"), 10) || 12));
+    const skip = (page - 1) * limit;
 
-    let docs: ICard[] = [];
+    const query: any = { isPublic: true };
     if (q) {
-      docs = await Card.find({ ...base, $text: { $search: q } }).limit(limit).lean(false);
-      if (docs.length === 0) {
-        const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-        docs = await Card.find({ ...base, $or: [{ title: rx }, { keywords: rx }, { tags: rx }] })
-          .limit(limit)
-          .lean(false);
-      }
-    } else {
-      docs = await Card.find(base).sort({ updatedAt: -1 }).limit(limit).lean(false);
+      query.$text = { $search: q };
     }
 
-    // batch owner lookup
-    const ownerIds = Array.from(new Set((docs as any[]).map((d) => String(d.owner))));
-    const users = await User.find({ _id: { $in: ownerIds } })
-      .select("name fullName firstName lastName email")
-      .lean();
-    const nameOf = (u: any) =>
-      u?.name ||
-      u?.fullName ||
-      [u?.firstName, u?.lastName].filter(Boolean).join(" ") ||
-      (u?.email ? String(u.email).split("@")[0] : "");
+    const [items, total] = await Promise.all([
+      Card.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Card.countDocuments(query),
+    ]);
 
-    const userMap = new Map<string, string>(users.map((u: any) => [String(u._id), nameOf(u) || ""]));
-
-    const results = (docs as any[]).map((d) => {
-      const s = sanitize(d);
-      const category =
-        (s?.data as any)?.category ||
-        (Array.isArray(s.tags) && s.tags[0]) ||
-        (Array.isArray(s.keywords) && s.keywords[0]) ||
-        "General";
-
-      // robust owner name: prefer userMap, then card's own data/name/title
-      const ownerName =
-        userMap.get(String(s.owner)) ||
-        (s as any)?.data?.name ||
-        s.title ||
-        "Unknown User";
-
-      return {
-        ...s,
-        ownerId: s.owner,
-        ownerName,
-        category,
-      };
+    return res.json({
+      page,
+      limit,
+      total,
+      results: items.map((d) => sanitize(d as any)),
     });
-
-    return res.json({ results });
   } catch (err) {
     console.error("searchPublic error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 }
 
-/** GET /api/public/profile/:owner/cards — list a user's public cards + owner */
+/** GET /api/public/profile/:owner/cards  (public) */
 export async function getPublicCards(req: Request, res: Response) {
   try {
-    const ownerId = String(req.params.owner);
-    if (!mongoose.isValidObjectId(ownerId)) {
-      return res.status(400).json({ message: "Invalid ownerId" });
-    }
+    const owner = req.params.owner;
+    if (!mongoose.isValidObjectId(owner))
+      return res.status(400).json({ message: "Invalid owner id" });
 
-    const [cards, owner] = await Promise.all([
-      Card.find({ owner: ownerId, isPublic: true }).sort({ updatedAt: -1 }).lean(false),
-      User.findById(ownerId).select("name fullName firstName lastName email").lean().catch(() => null),
-    ]);
+    const items = await Card.find({ ownerId: owner, isPublic: true })
+      .sort({ createdAt: -1 })
+      .limit(100);
 
-    const displayName = pickDisplayName(owner, cards);
-
-    return res.json({
-      owner: { _id: ownerId, name: displayName },
-      results: cards.map((doc) => sanitize(doc as any)),
-    });
+    return res.json({ results: items.map((d) => sanitize(d as any)) });
   } catch (err) {
     console.error("getPublicCards error:", err);
     return res.status(500).json({ message: "Server error" });
