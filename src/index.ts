@@ -1,79 +1,37 @@
-import "dotenv/config";
-import express, { Request, Response, NextFunction } from "express";
+import dotenv from "dotenv";
+dotenv.config();
+import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 import mongoose from "mongoose";
-
-// Routers
-import apiRouter from "./routes/index.js";
-import analyticsRouter from "./routes/analytics.js";
+import routes from "./routes";
 
 const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(morgan("tiny"));
 
-/** ---- CORS: read from env ----
- * CORS_ORIGIN example (NO trailing slashes, comma-separated):
- * https://instantlycards.com,https://www.instantlycards.com,http://localhost:3000
- */
-const allowedOrigins = (process.env.CORS_ORIGIN || "")
-  .split(",")
-  .map(s => s.trim())
-  .filter(Boolean);
+async function start() {
+  try {
+    const uri = process.env.MONGODB_URI!;
+    await mongoose.connect(uri, { dbName: process.env.MONGODB_DB || undefined });
+    console.log("✅ Mongo connected");
 
-// --- Middleware
-app.use(
-  cors({
-    origin(origin, callback) {
-      // allow tools like curl/Postman (no Origin header)
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
-app.options("*", cors());
-app.use(express.json({ limit: "2mb" }));
-app.use(morgan("dev"));
+    app.use("/api", routes);
 
-// --- Routes
-app.get("/health", (_req, res) => res.json({ ok: true }));
-app.use("/api", apiRouter);
-app.use("/v1/analytics", analyticsRouter); // legacy shim
+    app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// --- Error handler
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ message: "Server error" });
-});
+    app.use((err: any, _req, res, _next) => {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
+    });
 
-// --- Database
-const PORT = Number(process.env.PORT || 8080);
-const MONGODB_URI =
-  process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/cardsync";
-
-mongoose.set("strictQuery", true);
-mongoose
-  .connect(MONGODB_URI)
-  .then(() => console.log("[db] connected"))
-  .catch((e) => {
-    console.error("[db] connection error", e);
+    const port = process.env.PORT || 4000;
+    app.listen(port, () => console.log(`🚀 API listening on http://localhost:${port}`));
+  } catch (err) {
+    console.error("❌ Failed to start server:", err);
     process.exit(1);
-  });
-
-// --- Server
-const server = app.listen(PORT, () => {
-  console.log(`[server] listening on http://localhost:${PORT}`);
-});
-
-// --- Graceful shutdown
-function shutdown(signal: string) {
-  console.log(`[server] ${signal} received, closing...`);
-  server.close(() => {
-    mongoose.connection.close(false).then(() => process.exit(0));
-  });
+  }
 }
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+start();
