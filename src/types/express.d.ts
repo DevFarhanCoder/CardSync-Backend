@@ -1,6 +1,10 @@
-import "express";
-declare module "express-serve-static-core" {
+declare namespace Express {
+  interface UserPayload {
+    id: string;
+    _id?: string;
+    email?: string;
+  }
   interface Request {
-    user?: { id: string; _id: string; email?: string };
+    user?: UserPayload;
   }
 }

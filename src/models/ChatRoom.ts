@@ -23,6 +23,7 @@ const ChatRoomSchema = new Schema<IChatRoom>(
   { timestamps: true }
 );
 
+// Reuse compiled model (dev/hot reload)
 const ChatRoom =
   (mongoose.models.ChatRoom as mongoose.Model<IChatRoom>) ||
   mongoose.model<IChatRoom>("ChatRoom", ChatRoomSchema);
