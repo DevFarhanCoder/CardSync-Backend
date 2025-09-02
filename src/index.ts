@@ -8,6 +8,11 @@ import morgan from "morgan";
 import mongoose from "mongoose";
 // ⬇️ IMPORTANT: ESM requires the .js extension in TS source for runtime
 import routes from "./routes/index.js";
+// ✅ ESM requires .js on local paths
+import { registerSocket } from "./socket.js";
+import groupRoutes from "./routes/groups.js";
+
+
 
 const app = express();
 
@@ -25,6 +30,13 @@ async function start() {
 
     app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
+    app.use("/api", groupRoutes);
+
+    // Create HTTP server and register socket
+    const http = await import("http");
+    const server = http.createServer(app);
+    registerSocket(server);
+
     const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
       console.error(err);
       res.status(500).json({ error: "Server error" });
@@ -32,7 +44,7 @@ async function start() {
     app.use(errorHandler);
 
     const port = Number(process.env.PORT || 8080);
-    app.listen(port, () => console.log(`🚀 API listening on http://localhost:${port}`));
+    server.listen(port, () => console.log(`🚀 API listening on http://localhost:${port}`));
   } catch (err) {
     console.error("❌ Failed to start server:", err);
     process.exit(1);

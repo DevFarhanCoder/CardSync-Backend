@@ -125,5 +125,92 @@ chatRouter.post("/rooms/:roomId/messages", async (req: Request, res: Response, n
   } catch (e) { next(e); }
 });
 
+// GET /api/chat/rooms/:roomId
+chatRouter.get("/rooms/:roomId", async (req, res, next) => {
+  try {
+    const { roomId } = req.params;
+    const room = await ChatRoom.findById(roomId).lean();
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    // TODO: hydrate user names if you want
+    res.json({
+      id: String(room._id),
+      name: room.name,
+      createdAt: room.createdAt,
+      createdBy: String(room.admin),
+      members: room.members.map((m) => ({ userId: String(m) })),
+    });
+  } catch (e) { next(e); }
+});
+
+// PUT /api/chat/rooms/:roomId  { name }
+chatRouter.put("/rooms/:roomId", async (req, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const { roomId } = req.params;
+    const name = String(req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ error: "Name required" });
+
+    const room = await ChatRoom.findById(roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    if (String(room.admin) !== String(userId)) return res.status(403).json({ error: "Only admin can rename" });
+
+    room.name = name;
+    await room.save();
+    res.json({ id: String(room._id), name: room.name });
+  } catch (e) { next(e); }
+});
+
+// DELETE /api/chat/rooms/:roomId
+chatRouter.delete("/rooms/:roomId", async (req, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const { roomId } = req.params;
+    const room = await ChatRoom.findById(roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    if (String(room.admin) !== String(userId)) return res.status(403).json({ error: "Only admin can delete" });
+
+    await ChatMessage.deleteMany({ roomId });
+    await ChatRoom.deleteOne({ _id: roomId });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// POST /api/chat/rooms/:roomId/leave
+chatRouter.post("/rooms/:roomId/leave", async (req, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const { roomId } = req.params;
+    const room = await ChatRoom.findById(roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+
+    // prevent admin leaving if members still exist (optional)
+    room.members = room.members.filter((m) => String(m) !== String(userId));
+    await room.save();
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+// POST /api/chat/rooms/:roomId/invite-phone { phone }
+chatRouter.post("/rooms/:roomId/invite-phone", async (req, res, next) => {
+  try {
+    const userId = req.user!.id;
+    const { roomId } = req.params;
+    const phone = String(req.body?.phone || "").trim();
+    if (!phone) return res.status(400).json({ error: "Phone required" });
+
+    const room = await ChatRoom.findById(roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    if (String(room.admin) !== String(userId)) return res.status(403).json({ error: "Only admin can invite" });
+
+    // TODO: look up user by phone and add to room.members
+    // const invitedUser = await User.findOne({ phone });
+    // if (!invitedUser) { send SMS invite link instead… }
+    // else if (!room.members.some(m => String(m) === String(invitedUser._id))) { room.members.push(invitedUser._id as any); await room.save(); }
+
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
+
 export default chatRouter;
 export { chatRouter };
