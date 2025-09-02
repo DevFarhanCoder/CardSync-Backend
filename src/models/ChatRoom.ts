@@ -1,4 +1,3 @@
-// src/models/ChatRoom.ts
 import mongoose, { Schema, type Document, type Types } from "mongoose";
 
 export interface IChatRoom extends Document {
@@ -24,10 +23,8 @@ const ChatRoomSchema = new Schema<IChatRoom>(
   { timestamps: true }
 );
 
-// Re-use existing model if it’s already compiled (important for dev/hot reload)
 const ChatRoom =
   (mongoose.models.ChatRoom as mongoose.Model<IChatRoom>) ||
   mongoose.model<IChatRoom>("ChatRoom", ChatRoomSchema);
 
 export default ChatRoom;
-export type { IChatRoom };
