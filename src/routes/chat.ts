@@ -1,26 +1,32 @@
-import { Router, Request, Response, NextFunction } from "express";
-import ChatRoom, { IChatRoom } from "../models/ChatRoom.js";
+import { Router, type Request, type Response, type NextFunction } from "express";
+import ChatRoom from "../models/ChatRoom.js";
+import type { IChatRoom } from "../models/ChatRoom.js";
 import ChatMessage from "../models/ChatMessage.js";
-import requireAuth from "../middlewares/requireAuth.js";
+import { requireAuth } from "../middlewares/requireAuth.js";
+
 
 const chatRouter = Router();
 chatRouter.use(requireAuth);
 
 /* ------------ helpers ------------ */
 function presentRoom(
-  room: Pick<IChatRoom, "_id" | "name" | "code" | "admin" | "members" | "createdAt">,
+  room: Pick<IChatRoom, "_id" | "name" | "code" | "admin" | "members" | "createdAt" | "description" | "photoURL">,
   userId: string
 ) {
   const isAdmin = String(room.admin) === String(userId);
   return {
     id: String(room._id),
     name: room.name,
-    membersCount: Array.isArray(room.members) ? room.members.length : 1,
+    code: room.code,
     isAdmin,
-    code: isAdmin ? room.code : undefined,
+    membersCount: room.members?.length ?? 0,
     createdAt: room.createdAt,
+    description: room.description ?? "",
+    photoURL: room.photoURL ?? null,
   };
 }
+
+
 
 /* ------------ routes ------------ */
 
