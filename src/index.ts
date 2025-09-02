@@ -6,7 +6,8 @@ import express, { ErrorRequestHandler, Request, Response } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import mongoose from "mongoose";
-import routes from "./routes";
+// ⬇️ IMPORTANT: ESM requires the .js extension in TS source for runtime
+import routes from "./routes/index.js";
 
 const app = express();
 
@@ -20,13 +21,10 @@ async function start() {
     await mongoose.connect(uri, { dbName: process.env.MONGODB_DB || undefined });
     console.log("✅ Mongo connected");
 
-    // API routes
     app.use("/api", routes);
 
-    // Health
     app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
-    // Typed error handler (fixes TS7006)
     const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
       console.error(err);
       res.status(500).json({ error: "Server error" });
