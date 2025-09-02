@@ -1,6 +1,7 @@
 // src/middlewares/auth.ts
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import requireAuth from "./requireAuth";
 
 function devBypassEnabled() {
   // enable when NODE_ENV !== 'production' OR explicitly opted-in
@@ -42,3 +43,5 @@ export default function auth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 }
+
+export { requireAuth };
