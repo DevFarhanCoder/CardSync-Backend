@@ -202,11 +202,6 @@ chatRouter.post("/rooms/:roomId/invite-phone", async (req, res, next) => {
     if (!room) return res.status(404).json({ error: "Room not found" });
     if (String(room.admin) !== String(userId)) return res.status(403).json({ error: "Only admin can invite" });
 
-    // TODO: look up user by phone and add to room.members
-    // const invitedUser = await User.findOne({ phone });
-    // if (!invitedUser) { send SMS invite link instead… }
-    // else if (!room.members.some(m => String(m) === String(invitedUser._id))) { room.members.push(invitedUser._id as any); await room.save(); }
-
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

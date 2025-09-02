@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
+
 /** Enable bypass whenever NODE_ENV !== 'production' OR DEV_ALLOW_ANON=true */
 function devBypassEnabled() {
   return process.env.NODE_ENV !== "production" || process.env.DEV_ALLOW_ANON === "true";

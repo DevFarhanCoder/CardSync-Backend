@@ -11,7 +11,7 @@ import routes from "./routes/index.js";
 // ✅ ESM requires .js on local paths
 import { registerSocket } from "./socket.js";
 import groupRoutes from "./routes/groups.js";
-
+import groupPhotoRoutes from "./routes/groupPhoto.js";
 
 
 const app = express();
@@ -31,6 +31,10 @@ async function start() {
     app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
     app.use("/api", groupRoutes);
+
+    app.use("/api", groupPhotoRoutes);
+
+    app.use("/uploads", express.static("uploads"));
 
     // Create HTTP server and register socket
     const http = await import("http");

@@ -1,22 +1,27 @@
-import { Schema, model, Types, Document } from "mongoose";
+import mongoose, { Schema, Document } from "mongoose";
 
-export interface IChatRoom extends Document {
+export interface ChatRoomDoc extends Document {
   name: string;
-  code: string;                 // 5–6 digit OTP
-  admin: Types.ObjectId;        // creator user id
-  members: Types.ObjectId[];
+  code: string;
+  admin: mongoose.Types.ObjectId;
+  members: mongoose.Types.ObjectId[];
+  description?: string;       // ✅ add this
+  photoURL?: string;          // optional, for group logo
   createdAt: Date;
   updatedAt: Date;
 }
 
-const ChatRoomSchema = new Schema<IChatRoom>(
+const ChatRoomSchema = new Schema<ChatRoomDoc>(
   {
-    name: { type: String, required: true, trim: true },
-    code: { type: String, required: true, unique: true, index: true },
-    admin: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    members: [{ type: Schema.Types.ObjectId, ref: "User", index: true }],
+    name: { type: String, required: true },
+    code: { type: String, required: true, unique: true },
+    admin: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    members: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    description: { type: String },        // ✅ add this
+    photoURL: { type: String },           // optional
   },
   { timestamps: true }
 );
 
-export default model<IChatRoom>("ChatRoom", ChatRoomSchema);
+const ChatRoom = mongoose.model<ChatRoomDoc>("ChatRoom", ChatRoomSchema);
+export default ChatRoom;
