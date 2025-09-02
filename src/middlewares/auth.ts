@@ -1,29 +1,44 @@
+// src/middlewares/auth.ts
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
+function devBypassEnabled() {
+  // enable when NODE_ENV !== 'production' OR explicitly opted-in
+  return process.env.NODE_ENV !== "production" || process.env.DEV_ALLOW_ANON === "true";
+}
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev_change_me";
+export default function auth(req: Request, res: Response, next: NextFunction) {
+  const hdr = req.headers.authorization || "";
+  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
 
-export type Authed = Request & { user?: { _id: string; email?: string } };
+  // In development, always allow through and synthesize a user
+  if (devBypassEnabled()) {
+    const fakeId = process.env.DEV_USER_ID || "000000000000000000000001";
+    req.user = { id: fakeId, _id: fakeId, email: undefined };
+    return next();
+  }
 
-export function requireAuth(req: Authed, res: Response, next: NextFunction) {
+  // Production: require a real token
+  if (!token || token === "undefined" || token === "null") {
+    return res.status(401).json({ error: "Missing token" });
+  }
+
   try {
-    const h = req.headers.authorization || "";
-    const token = h.startsWith("Bearer ") ? h.slice(7) : "";
-    if (!token) return res.status(401).json({ message: "Unauthorized" });
+    const payload = jwt.verify(token, process.env.JWT_SECRET || "changeme") as
+      | { userId?: string; id?: string; sub?: string; email?: string }
+      | string;
 
-    const payload = jwt.verify(token, JWT_SECRET) as { _id: string; email?: string };
-    if (!payload?._id) return res.status(401).json({ message: "Unauthorized" });
+    if (typeof payload === "string") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
 
-    req.user = { _id: String(payload._id), email: payload.email };
+    const id = payload.userId || payload.id || payload.sub;
+    if (!id) return res.status(401).json({ error: "Invalid token" });
+
+    // Put both shapes on req.user to satisfy all routes
+    req.user = { id: String(id), _id: String(id), email: payload.email };
     next();
   } catch {
-    return res.status(401).json({ message: "Unauthorized" });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 }
-
-
-export interface AuthedRequest extends Request {
-  user?: { id: string; email?: string };
-}
-

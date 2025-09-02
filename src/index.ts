@@ -1,12 +1,15 @@
+// src/index.ts
 import dotenv from "dotenv";
 dotenv.config();
-import express from "express";
+
+import express, { ErrorRequestHandler, Request, Response } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import mongoose from "mongoose";
 import routes from "./routes";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 app.use(morgan("tiny"));
@@ -17,16 +20,20 @@ async function start() {
     await mongoose.connect(uri, { dbName: process.env.MONGODB_DB || undefined });
     console.log("✅ Mongo connected");
 
+    // API routes
     app.use("/api", routes);
 
-    app.get("/api/health", (_req, res) => res.json({ ok: true }));
+    // Health
+    app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
 
-    app.use((err: any, _req, res, _next) => {
+    // Typed error handler (fixes TS7006)
+    const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
       console.error(err);
       res.status(500).json({ error: "Server error" });
-    });
+    };
+    app.use(errorHandler);
 
-    const port = process.env.PORT || 4000;
+    const port = Number(process.env.PORT || 8080);
     app.listen(port, () => console.log(`🚀 API listening on http://localhost:${port}`));
   } catch (err) {
     console.error("❌ Failed to start server:", err);
