@@ -8,7 +8,7 @@ function devBypassEnabled() {
   return process.env.NODE_ENV !== "production" || process.env.DEV_ALLOW_ANON === "true";
 }
 
-export default function auth(req: Request, res: Response, next: NextFunction) {
+function auth(req: Request, res: Response, next: NextFunction) {
   const hdr = req.headers.authorization || "";
   const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
 
@@ -44,4 +44,5 @@ export default function auth(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export { requireAuth };
+export default auth;
+export { auth };
