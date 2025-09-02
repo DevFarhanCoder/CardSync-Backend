@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
-import ChatRoom, { IChatRoom } from "../models/ChatRoom";
-import ChatMessage from "../models/ChatMessage";
-import requireAuth from "../middlewares/requireAuth";
+import ChatRoom, { IChatRoom } from "../models/ChatRoom.js";
+import ChatMessage from "../models/ChatMessage.js";
+import requireAuth from "../middlewares/requireAuth.js";
 
 const chatRouter = Router();
 chatRouter.use(requireAuth);
