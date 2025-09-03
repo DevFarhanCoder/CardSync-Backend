@@ -8,6 +8,8 @@ import mongoose from "mongoose";
 
 import routes from "./routes/index.js";   // <-- single aggregator for all /api routes
 import { registerSocket } from "./socket";
+// src/index.ts
+
 
 const app = express();
 
