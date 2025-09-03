@@ -1,7 +1,5 @@
-// src/routes/analytics.ts
-// src/routes/analytics.ts
 import { Router } from "express";
-import { requireAuth } from "../middlewares/auth.js";
+import requireAuth from "../middlewares/auth.js";
 import { ViewEvent, ShareEvent, Connection } from "../models/index.js";
 import Card from "../models/Card.js";
 

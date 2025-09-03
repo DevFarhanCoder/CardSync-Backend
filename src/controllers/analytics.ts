@@ -21,7 +21,7 @@ export async function incrementCardMetric(req: Request, res: Response) {
     );
     if (!doc) return res.status(404).json({ message: "Not found" });
 
-    return res.json({ analytics: doc.analytics });
+    return res.json({ analytics: (doc as any).analytics });
   } catch (err) {
     console.error("incrementCardMetric error:", err);
     return res.status(500).json({ message: "Server error" });
@@ -37,7 +37,7 @@ export async function getCardAnalytics(req: Request, res: Response) {
     const doc = await Card.findById(id).select("analytics").lean();
     if (!doc) return res.status(404).json({ message: "Not found" });
 
-    return res.json({ analytics: doc.analytics });
+    return res.json({ analytics: (doc as any).analytics });
   } catch (err) {
     console.error("getCardAnalytics error:", err);
     return res.status(500).json({ message: "Server error" });

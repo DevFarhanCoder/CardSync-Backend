@@ -27,9 +27,12 @@ export async function signup(req: Request, res: Response) {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({ email, name, passwordHash });
 
-    const token = jwt.sign({ _id: String(user._id), email }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-    });
+    // controllers/auth.ts
+    const token = jwt.sign(
+      { sub: String(user._id), email: user.email },    // 👈 use sub instead of _id
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
 
     return res.status(201).json({
       token,
@@ -56,19 +59,20 @@ export async function login(req: Request, res: Response, _next: NextFunction) {
       .select("name email")         // include public fields
       .exec();
 
-    if (!user || !user.passwordHash) {
+    if (!user || !user.password) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
+    const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
+    // controllers/auth.ts
+    // src/controllers/auth.ts (login)
     const token = jwt.sign(
-      { _id: String(user._id), email: user.email },
-      JWT_SECRET,
+      { sub: String(user._id), email: user.email },   // ✅ use sub
+      JWT_SECRET,                                     // same secret used in middleware
       { expiresIn: JWT_EXPIRES_IN }
     );
-
     return res.json({
       token,
       user: {

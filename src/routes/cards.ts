@@ -1,39 +1,47 @@
 import { Router } from "express";
-import {
-  createCard,
-  updateCard,
-  getCardById,
-  searchPublic,
-  getPublicCards,
-  shareCardLink,
-} from "../controllers/cards.js";
-import { requireAuth } from "../middlewares/auth.js";
 import Card from "../models/Card.js";
+import requireAuth from "../middlewares/auth.js";
 
 const router = Router();
 
-/** Owner CRUD */
-router.post("/cards", requireAuth as any, createCard as any);
-router.put("/cards/:id", requireAuth as any, updateCard as any);
-router.get("/cards/:id", requireAuth as any, getCardById as any);
-router.post("/cards/:id/share", requireAuth as any, shareCardLink as any);
+router.get("/cards", requireAuth, async (req: any, res) => {
+  const cards = await Card.find({ owner: req.user.id }).sort({ updatedAt: -1 });
+  res.json({ cards });
+});
 
-/** Public endpoints */
-router.get("/explore", searchPublic as any);
-router.get("/public/profile/:owner/cards", getPublicCards as any);
+router.post("/cards", requireAuth, async (req: any, res) => {
+  const payload = req.body || {};
+  const card = await Card.create({
+    owner: req.user.id,
+    title: payload.title || "Untitled",
+    theme: payload.theme || "luxe",
+    data: payload,
+    isPublic: !!payload.isPublic,
+  });
+  res.status(201).json({ card });
+});
 
-/** Delete (kept inline for simplicity) */
-router.delete("/cards/:id", requireAuth as any, async (req, res) => {
-  try {
-    const userId = (req as any).user?._id;
-    const { id } = req.params;
-    const doc = await Card.findOneAndDelete({ _id: id, ownerId: userId });
-    if (!doc) return res.status(404).json({ error: "Card not found or not owned by you" });
-    return res.json({ success: true, message: "Card deleted" });
-  } catch (e) {
-    console.error("Delete card error:", e);
-    return res.status(500).json({ error: "Internal server error" });
-  }
+router.get("/cards/:id", requireAuth, async (req: any, res) => {
+  const card = await Card.findOne({ _id: req.params.id, owner: req.user.id });
+  if (!card) return res.status(404).json({ message: "Not found" });
+  res.json({ card });
+});
+
+router.put("/cards/:id", requireAuth, async (req: any, res) => {
+  const payload = req.body || {};
+  const card = await Card.findOneAndUpdate(
+    { _id: req.params.id, owner: req.user.id },
+    { title: payload.title, theme: payload.theme, data: payload, isPublic: !!payload.isPublic },
+    { new: true }
+  );
+  if (!card) return res.status(404).json({ message: "Not found" });
+  res.json({ card });
+});
+
+router.delete("/cards/:id", requireAuth, async (req: any, res) => {
+  const out = await Card.findOneAndDelete({ _id: req.params.id, owner: req.user.id });
+  if (!out) return res.status(404).json({ message: "Not found" });
+  res.json({ ok: true });
 });
 
 export default router;
