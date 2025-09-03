@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 import Card, { ICard } from "../models/Card.js";
 
 /** If auth middleware adds req.user */
@@ -39,7 +39,7 @@ function tokensFrom(title?: string, list: string[] = []) {
 
 function sanitize(doc: ICard) {
   const json = doc.toObject({ getters: true, virtuals: false });
-  delete json.__v;
+  delete (json as any).__v;
   return {
     _id: String(json._id),
     title: json.title,
@@ -75,10 +75,10 @@ export async function createCard(req: AuthedRequest, res: Response) {
     const doc = await Card.create({
       title,
       slug,
-      ownerId: new mongoose.Types.ObjectId(String(userId)),
+      ownerId: new Types.ObjectId(String(userId)),
       theme,
       isPublic: !!isPublic,
-      data, // ← includes extra.personal / extra.company from the new form
+      data, // includes the large builder payload
       keywords: tokensFrom(title, keywords as string[]),
       tags,
     });
@@ -100,8 +100,8 @@ export async function updateCard(req: AuthedRequest, res: Response) {
     if (!mongoose.isValidObjectId(id))
       return res.status(400).json({ message: "Invalid id" });
 
-    const body = req.body || {};
-    const update: any = {};
+    const body = (req.body || {}) as Partial<ICard> & { data?: any };
+    const update: Partial<ICard> & { data?: any } = {};
     if (typeof body.title === "string") {
       update.title = body.title;
       update.keywords = tokensFrom(body.title, body.keywords || []);
@@ -145,7 +145,7 @@ export async function getCardById(req: AuthedRequest, res: Response) {
   }
 }
 
-/** POST /api/cards/:id/share  (protected) -> returns a public share URL */
+/** POST /api/cards/:id/share  (protected) */
 export async function shareCardLink(req: AuthedRequest, res: Response) {
   try {
     const userId = req.user?._id;
@@ -162,9 +162,7 @@ export async function shareCardLink(req: AuthedRequest, res: Response) {
     );
     if (!doc) return res.status(404).json({ message: "Not found" });
 
-    // Match the frontend route you already use
     const shareUrl = `${FRONTEND_ORIGIN}/share/${id}`;
-
     return res.json({ shareUrl, card: sanitize(doc) });
   } catch (err) {
     console.error("shareCardLink error:", err);
@@ -172,7 +170,7 @@ export async function shareCardLink(req: AuthedRequest, res: Response) {
   }
 }
 
-/** GET /api/explore?q=...  (public) */
+/** GET /api/explore (public) */
 export async function searchPublic(req: Request, res: Response) {
   try {
     const q = String((req.query.q as string) || "").trim();
@@ -181,9 +179,7 @@ export async function searchPublic(req: Request, res: Response) {
     const skip = (page - 1) * limit;
 
     const query: any = { isPublic: true };
-    if (q) {
-      query.$text = { $search: q };
-    }
+    if (q) query.$text = { $search: q };
 
     const [items, total] = await Promise.all([
       Card.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
