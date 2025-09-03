@@ -1,36 +1,36 @@
-import { Request, Response, NextFunction } from "express";
+// src/middlewares/auth.ts
+import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-function setReqUser(req: Request, id: string, email?: string) {
-  (req as any).user = { id, _id: id, email };
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+
+interface TokenPayload {
+  sub?: string;
+  id?: string;
+  userId?: string;
+  _id?: string;
+  email?: string;
+  // ...any other claims you put in the token
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const hdr = req.headers.authorization || "";
-  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+export default function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : "";
 
-
-  if ((process.env.NODE_ENV !== "production" || process.env.DEV_ALLOW_ANON === "true") && !token) {
-    setReqUser(req, "000000000000000000000000", "dev@example.com");
-    return next();
-  }
-
-  if (!token) return res.status(401).json({ error: "Missing token" });
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
 
   try {
-    // MUST match the secret used when signing in your login route
-    const secret = process.env.JWT_SECRET || "dev-secret";
+    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload;
 
-    const payload = jwt.verify(token, secret) as any;
-    const uid = String(payload.sub ?? payload.id ?? payload.userId ?? payload._id ?? "");
-    if (!uid) return res.status(401).json({ error: "Invalid token" });
-    (req as any).user = { id: uid, email: payload.email };
-    setReqUser(req, uid, payload.email);
+    // normalize to a definite string id; if not present, reject
+    const uid =
+      payload.sub || payload.id || payload.userId || payload._id || "";
+
+    if (!uid) return res.status(401).json({ message: "Unauthorized" });
+
+    req.user = { _id: String(uid), email: payload.email };
     next();
   } catch {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({ message: "Unauthorized" });
   }
 }
-
-// Export as both default and named to be import-style agnostic
-export default requireAuth;
