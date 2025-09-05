@@ -1,161 +1,78 @@
 // src/controllers/cards.ts
-import type { RequestHandler } from "express";
-import mongoose from "mongoose";
-import Card from "../models/Card.js";
+import type { Request, Response } from "express";
+import { Types } from "mongoose";
+import { Card } from "../models/card.js";
 
-const FRONTEND_ORIGIN =
-  process.env.FRONTEND_ORIGIN || process.env.PUBLIC_APP_ORIGIN || "http://localhost:3000";
-
-function sanitize(doc: any) {
-  const json = doc.toObject({ getters: true, virtuals: false });
-  delete json.__v;
-  return {
-    _id: String(json._id),
-    title: json.title,
-    slug: json.slug,
-    theme: json.theme,
-    isPublic: !!json.isPublic,
-    ownerId: String(json.ownerId),
-    data: json.data || {},
-    keywords: json.keywords || [],
-    tags: json.tags || [],
-    analytics: json.analytics || { views: 0, clicks: 0, shares: 0, saves: 0 },
-    createdAt: json.createdAt,
-    updatedAt: json.updatedAt,
-  };
-}
-
-export const searchPublic: RequestHandler = async (req, res) => {
-  const qRaw = (req.query.q as string) || "";
-  const q = qRaw.trim();
-  const limit = Math.min(parseInt(String(req.query.limit || "20"), 10) || 20, 100);
-  const page = Math.max(parseInt(String(req.query.page || "1"), 10) || 1, 1);
-  const skip = (page - 1) * limit;
-
-  const filter: any = { isPublic: true };
-
-  // Prefer text search if available and query is non-empty, otherwise fallback to regex
-  if (q) {
-    filter.$or = [
-      { title: { $regex: q, $options: "i" } },
-      { tags: { $elemMatch: { $regex: q, $options: "i" } } },
-      { keywords: { $elemMatch: { $regex: q, $options: "i" } } },
-    ];
-  }
-
-  const [total, docs] = await Promise.all([
-    Card.countDocuments(filter),
-    Card.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
-  ]);
-
-  return res.json({
-    query: q,
-    page,
-    limit,
-    total,
-    results: docs.map((d) => sanitize(d)),
-  });
+/** GET /api/cards (my cards) */
+export const listMyCards = async (req: Request & { userId?: string }, res: Response) => {
+  const owner = req.userId as string;
+  const docs = await Card.find({ userId: owner }).sort({ updatedAt: -1 }).lean();
+  const out = docs.map((d: any) => ({
+    id: String(d._id),
+    title: d.title ?? "",
+    visibility: d.visibility ?? "private",
+    updatedAt: d.updatedAt,
+  }));
+  res.json({ cards: out });
 };
 
-// GET /api/public/profile/:owner/cards
-// :owner can be a Mongo ObjectId string (your user's _id)
-export const getPublicCards: RequestHandler = async (req, res) => {
-  const { owner } = req.params;
-
-  if (!owner || !mongoose.isValidObjectId(owner)) {
-    return res.status(400).json({ message: "Invalid or missing owner id" });
-  }
-
-  const ownerId = new mongoose.Types.ObjectId(owner);
-  const limit = Math.min(parseInt(String(req.query.limit || "50"), 10) || 50, 100);
-  const page = Math.max(parseInt(String(req.query.page || "1"), 10) || 1, 1);
-  const skip = (page - 1) * limit;
-
-  const filter = { ownerId, isPublic: true };
-
-  const [total, docs] = await Promise.all([
-    Card.countDocuments(filter),
-    Card.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit),
-  ]);
-
-  return res.json({
-    owner: String(ownerId),
-    page,
-    limit,
-    total,
-    cards: docs.map((d) => sanitize(d)),
-  });
+/** GET /api/cards/:id (owner only; your route already has requireAuth) */
+export const getCard = async (req: Request & { userId?: string }, res: Response) => {
+  const { id } = req.params;
+  const owner = req.userId as string;
+  const doc = await Card.findOne({ _id: id, userId: owner }).lean();
+  if (!doc) return res.status(404).json({ message: "Not found" });
+  res.json({ card: doc });
 };
 
-export const createCard: RequestHandler = async (req, res) => {
-  const userId = req.user?._id; // typed from declaration merging
-  if (!userId) return res.status(401).json({ message: "Unauthorized" });
-
-  const { title = "Untitled", theme = "luxe", data = {}, keywords = [], tags = [], isPublic = false } =
-    (req.body || {}) as any;
-
+/** POST /api/cards */
+export const createCard = async (req: Request & { userId?: string }, res: Response) => {
+  const owner = req.userId as string;
+  const payload = req.body as any;
   const doc = await Card.create({
-    title,
-    slug: (title || "card").toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-    ownerId: new mongoose.Types.ObjectId(userId),
-    theme,
-    isPublic: !!isPublic,
-    data,
-    keywords,
-    tags,
+    userId: new Types.ObjectId(owner),
+    title: payload?.title ?? "",
+    slug: payload?.slug ?? undefined,
+    data: payload?.data ?? {},
+    visibility: payload?.visibility ?? "private",
   });
-
-  return res.status(201).json({ card: sanitize(doc) });
+  res.status(201).json({ card: doc });
 };
 
-export const updateCard: RequestHandler = async (req, res) => {
-  const userId = req.user?._id;
-  if (!userId) return res.status(401).json({ message: "Unauthorized" });
-
+/** PATCH /api/cards/:id */
+export const updateCard = async (req: Request & { userId?: string }, res: Response) => {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid id" });
-
-  const body = req.body || {};
-  const update: any = {};
-  if (typeof body.title === "string") update.title = body.title;
-  if (typeof body.theme === "string") update.theme = body.theme;
-  if (typeof body.isPublic === "boolean") update.isPublic = body.isPublic;
-  if (body.data && typeof body.data === "object") update.data = body.data;
-  if (Array.isArray(body.tags)) update.tags = body.tags;
-
-  const doc = await Card.findOneAndUpdate({ _id: id, ownerId: userId }, { $set: update }, { new: true });
-  if (!doc) return res.status(404).json({ message: "Not found" });
-
-  return res.json({ card: sanitize(doc) });
-};
-
-export const getCardById: RequestHandler = async (req, res) => {
-  const userId = req.user?._id;
-  if (!userId) return res.status(401).json({ message: "Unauthorized" });
-
-  const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid id" });
-
-  const doc = await Card.findOne({ _id: id, ownerId: userId });
-  if (!doc) return res.status(404).json({ message: "Not found" });
-
-  return res.json({ card: sanitize(doc) });
-};
-
-export const shareCardLink: RequestHandler = async (req, res) => {
-  const userId = req.user?._id;
-  if (!userId) return res.status(401).json({ message: "Unauthorized" });
-
-  const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: "Invalid id" });
-
+  const owner = req.userId as string;
+  const payload = req.body as any;
   const doc = await Card.findOneAndUpdate(
-    { _id: id, ownerId: userId },
-    { $set: { isPublic: true } },
+    { _id: id, userId: owner },
+    { $set: payload },
     { new: true }
   );
   if (!doc) return res.status(404).json({ message: "Not found" });
+  res.json({ card: doc });
+};
 
-  const shareUrl = `${FRONTEND_ORIGIN}/share/${id}`;
-  return res.json({ shareUrl, card: sanitize(doc) });
+/** DELETE /api/cards/:id */
+export const removeCard = async (req: Request & { userId?: string }, res: Response) => {
+  const { id } = req.params;
+  const owner = req.userId as string;
+  const done = await Card.findOneAndDelete({ _id: id, userId: owner });
+  if (!done) return res.status(404).json({ message: "Not found" });
+  res.json({ ok: true });
+};
+
+/** GET /api/public/search?q=... (public/unlisted search, used elsewhere) */
+export const searchPublic = async (req: Request, res: Response) => {
+  const q = (req.query.q as string) || "";
+  const filter: any = { visibility: { $in: ["public", "unlisted"] } };
+  if (q) filter.title = { $regex: q, $options: "i" };
+
+  const docs = await Card.find(filter).sort({ updatedAt: -1 }).limit(50).lean();
+  const out = docs.map((d: any) => ({
+    id: String(d._id),
+    title: d.title ?? "",
+    visibility: d.visibility ?? "public",
+  }));
+  res.json({ results: out });
 };

@@ -1,27 +1,28 @@
-import { Request, Response } from 'express';
-import { z } from 'zod';
-import User from '../models/User.js';
+// src/controllers/profile.ts
+import type { Request, Response } from "express";
+import { User } from "../models/user.js";
 
-const profileSchema = z.object({
-  name: z.string().min(1).optional(),
-  headline: z.string().max(140).optional(),
-  bio: z.string().max(1000).optional(),
-  company: z.string().optional(),
-  location: z.string().optional(),
-  defaultCardId: z.string().optional(),
-});
+/** GET /api/profile/me */
+export const getMe = async (req: Request & { userId?: string }, res: Response) => {
+  if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
+  const user = await User.findById(req.userId).lean();
+  if (!user) return res.status(404).json({ message: "User not found" });
+  res.json({
+    user: {
+      _id: user._id,
+      email: user.email,
+      name: user.name ?? "",
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    },
+  });
+};
 
-export async function getProfile(req: Request & { user?: { id: string } }, res: Response) {
-  const user = await User.findById(req.user!.id).lean();
-  if (!user) return res.status(404).json({ error: 'Profile not found' });
-  const { _id, name, email, headline, bio, company, location, defaultCardId, createdAt, updatedAt } = user as any;
-  return res.json({ id: _id, name, email, headline, bio, company, location, defaultCardId, createdAt, updatedAt });
-}
-
-export async function updateProfile(req: Request & { user?: { id: string } }, res: Response) {
-  const data = profileSchema.parse(req.body);
-  const updated = await User.findByIdAndUpdate(req.user!.id, data, { new: true }).lean();
-  if (!updated) return res.status(404).json({ error: 'Profile not found' });
-  const { _id, name, email, headline, bio, company, location, defaultCardId, createdAt, updatedAt } = updated as any;
-  return res.json({ id: _id, name, email, headline, bio, company, location, defaultCardId, createdAt, updatedAt });
-}
+/** PATCH /api/profile */
+export const updateMe = async (req: Request & { userId?: string }, res: Response) => {
+  if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
+  const payload = req.body as Partial<{ name: string }>;
+  const user = await User.findByIdAndUpdate(req.userId, { $set: payload }, { new: true }).lean();
+  if (!user) return res.status(404).json({ message: "User not found" });
+  res.json({ user: { _id: user._id, email: user.email, name: user.name ?? "" } });
+};
