@@ -1,16 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "esModuleInterop": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "node",
     "strict": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist",
-    "resolveJsonModule": true,
-    "types": ["node", "express"],
-    "typeRoots": ["./src/types", "./node_modules/@types"]
+    "rootDir": "src",
+    "resolveJsonModule": true
   },
-  "include": ["src", "../CardSync-Frontend/src/context"],
-  "exclude": ["dist", "node_modules"]
+  "include": ["src/**/*.ts", "src/types/**/*.d.ts"]
 }

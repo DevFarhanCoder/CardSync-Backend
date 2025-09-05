@@ -1,18 +1,14 @@
 // src/types/express.d.ts
-import "express";
+import "express-serve-static-core";
 
-declare global {
-  namespace Express {
-    // The shape your middleware guarantees once it calls next()
-    interface User {
-      _id: string;
+declare module "express-serve-static-core" {
+  interface Request {
+    user?: {
+      id: string;                // routes use this
+      _id?: string;              // controllers use this
       email?: string;
-    }
-
-    interface Request {
-      user?: User; // optional before auth; present after requireAuth
-    }
+      role?: string;
+      [k: string]: any;
+    };
   }
 }
-
-export {};
