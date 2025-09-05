@@ -1,21 +1,29 @@
 import { Router } from "express";
-import { createCard, updateCard, getCardById, shareCardLink } from "../controllers/cards.js";
-import { requireAuth } from "../middlewares/requireAuth.js";
+import requireAuth from "../middlewares/auth";
+import ensureOwner from "../middlewares/ensureOwner";
+import {
+  listMyCards,
+  getCard,           // our canonical getter
+  getCardById,      // alias for compatibility
+  createCard,
+  updateCard,
+  removeCard,
+  shareCardLink,    // optional helper if you expose share
+} from "../controllers/cards";
 
 const router = Router();
 
-/**
- * Mounted at /api/cards in index.ts, so these resolve to:
- * POST   /api/cards
- * PUT    /api/cards/:id
- * GET    /api/cards/:id
- * POST   /api/cards/:id/share
- */
-router.use(requireAuth);       // <— add this, controllers can rely on req.user
+// list/create
+router.get("/", requireAuth, listMyCards);
+router.post("/", requireAuth, createCard);
 
-router.post("/", createCard);
-router.put("/:id", updateCard);
-router.get("/:id", getCardById);
-router.post("/:id/share", shareCardLink);
+// read/update/delete
+router.get("/:id", requireAuth, ensureOwner, getCard);        // canonical
+router.get("/:id/by-id", requireAuth, ensureOwner, getCardById); // compatibility alias
+router.patch("/:id", requireAuth, ensureOwner, updateCard);
+router.delete("/:id", requireAuth, ensureOwner, removeCard);
+
+// sharing endpoint (optional)
+router.post("/:id/share", requireAuth, ensureOwner, shareCardLink);
 
 export default router;

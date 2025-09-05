@@ -1,9 +1,8 @@
-// src/controllers/cards.ts
 import type { Request, Response } from "express";
 import { Types } from "mongoose";
-import { Card } from "../models/card.js";
+import { Card } from "../models/card";
 
-/** GET /api/cards (my cards) */
+/** GET /api/cards */
 export const listMyCards = async (req: Request & { userId?: string }, res: Response) => {
   const owner = req.userId as string;
   const docs = await Card.find({ userId: owner }).sort({ updatedAt: -1 }).lean();
@@ -16,7 +15,7 @@ export const listMyCards = async (req: Request & { userId?: string }, res: Respo
   res.json({ cards: out });
 };
 
-/** GET /api/cards/:id (owner only; your route already has requireAuth) */
+/** GET /api/cards/:id */
 export const getCard = async (req: Request & { userId?: string }, res: Response) => {
   const { id } = req.params;
   const owner = req.userId as string;
@@ -24,6 +23,9 @@ export const getCard = async (req: Request & { userId?: string }, res: Response)
   if (!doc) return res.status(404).json({ message: "Not found" });
   res.json({ card: doc });
 };
+
+/** (alias for routes expecting getCardById) */
+export const getCardById = getCard;
 
 /** POST /api/cards */
 export const createCard = async (req: Request & { userId?: string }, res: Response) => {
@@ -62,7 +64,7 @@ export const removeCard = async (req: Request & { userId?: string }, res: Respon
   res.json({ ok: true });
 };
 
-/** GET /api/public/search?q=... (public/unlisted search, used elsewhere) */
+/** GET /api/public/search?q=... */
 export const searchPublic = async (req: Request, res: Response) => {
   const q = (req.query.q as string) || "";
   const filter: any = { visibility: { $in: ["public", "unlisted"] } };
@@ -75,4 +77,20 @@ export const searchPublic = async (req: Request, res: Response) => {
     visibility: d.visibility ?? "public",
   }));
   res.json({ results: out });
+};
+
+/** POST /api/cards/:id/share  (optional helper if your route expects shareCardLink) */
+export const shareCardLink = async (req: Request & { userId?: string }, res: Response) => {
+  const { id } = req.params;
+  const owner = req.userId as string;
+
+  const token = Math.random().toString(36).slice(2, 10);
+  const doc = await Card.findOneAndUpdate(
+    { _id: id, userId: owner },
+    { $set: { shareToken: token, visibility: "unlisted" } },
+    { new: true }
+  ).lean();
+
+  if (!doc) return res.status(404).json({ message: "Not found" });
+  res.json({ shareToken: token });
 };

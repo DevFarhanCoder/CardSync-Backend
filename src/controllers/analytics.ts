@@ -1,6 +1,5 @@
-// src/controllers/analytics.ts
 import type { Request, Response } from "express";
-import { Card } from "../models/card.js";
+import { Card } from "../models/card";
 
 /** GET /api/analytics/overview */
 export const overview = async (req: Request & { userId?: string }, res: Response) => {

@@ -1,8 +1,6 @@
-// src/middlewares/ensureOwner.ts
 import type { Request, Response, NextFunction } from "express";
-import { Card } from "../models/card.js";
+import { Card } from "../models/card";
 
-/** Ensures the current user owns :id card */
 export default async function ensureOwner(
   req: Request & { userId?: string },
   res: Response,

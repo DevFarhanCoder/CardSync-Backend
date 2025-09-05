@@ -1,22 +1,19 @@
-// src/controllers/auth.ts
 import type { Request, Response } from "express";
 import * as jwt from "jsonwebtoken";
-import { User, UserDoc } from "../models/user.js";
+import { User, UserDoc } from "../models/user";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
-const JWT_EXPIRES_IN_RAW = process.env.JWT_EXPIRES_IN || "7d";
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "7d") as jwt.SignOptions["expiresIn"];
 
 if (!JWT_SECRET) {
   console.error("❌ JWT_SECRET is not set");
 }
 
-/** Create a signed JWT for a user id (typed for jsonwebtoken v9) */
 function signToken(userId: string) {
-  const opts: jwt.SignOptions = { expiresIn: JWT_EXPIRES_IN_RAW as any };
+  const opts: jwt.SignOptions = { expiresIn: JWT_EXPIRES_IN };
   return jwt.sign({ sub: userId }, JWT_SECRET as jwt.Secret, opts);
 }
 
-/** Strip sensitive fields */
 function toPublicUser(u: UserDoc) {
   return {
     _id: u._id,
@@ -29,20 +26,11 @@ function toPublicUser(u: UserDoc) {
 
 /** POST /api/auth/register */
 export const register = async (req: Request, res: Response) => {
-  const { email, password, name } = req.body as {
-    email: string;
-    password: string;
-    name?: string;
-  };
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
-  }
+  const { email, password, name } = req.body as { email: string; password: string; name?: string };
+  if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
 
   const exists = await User.findOne({ email });
-  if (exists) {
-    return res.status(409).json({ message: "Email already in use" });
-  }
+  if (exists) return res.status(409).json({ message: "Email already in use" });
 
   const user = await User.create({ email, password, name });
   const token = signToken(String(user._id));
@@ -52,9 +40,7 @@ export const register = async (req: Request, res: Response) => {
 /** POST /api/auth/login */
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body as { email: string; password: string };
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password are required" });
-  }
+  if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
 
   const user = await User.findOne({ email }).select("+password");
   if (!user) return res.status(400).json({ message: "Invalid credentials" });
@@ -66,11 +52,10 @@ export const login = async (req: Request, res: Response) => {
   return res.json({ token, user: toPublicUser(user as UserDoc) });
 };
 
-/** GET /api/auth/me (requires requireAuth to set req.userId) */
+/** GET /api/auth/me */
 export const me = async (req: Request & { userId?: string }, res: Response) => {
   if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
   const user = await User.findById(req.userId);
   if (!user) return res.status(404).json({ message: "User not found" });
-
   return res.json({ user: toPublicUser(user as UserDoc) });
 };
