@@ -1,7 +1,7 @@
 // src/controllers/auth.ts
 import type { Request, Response } from "express";
-import jwt from "jsonwebtoken";
-import { User, UserDoc } from "../models/User.js"
+import * as jwt from "jsonwebtoken";            // ✅ namespace import fixes overloads
+import { User, UserDoc } from "../models/User.js";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
@@ -14,7 +14,7 @@ if (!JWT_SECRET) {
 /** Create a signed JWT for a user id */
 function signToken(userId: string) {
   if (!JWT_SECRET) throw new Error("JWT_SECRET is not set");
-  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign({ sub: userId }, JWT_SECRET as jwt.Secret, { expiresIn: JWT_EXPIRES_IN });
 }
 
 /** Remove sensitive fields before sending user back */
