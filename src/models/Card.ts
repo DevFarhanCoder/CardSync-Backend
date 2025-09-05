@@ -1,58 +1,38 @@
-import mongoose, { Schema, Document, Types } from "mongoose";
+// src/models/card.ts
+import { Schema, model, Model, HydratedDocument, Types } from "mongoose";
 
-export interface IAnalytics {
-  views: number;
-  clicks: number;
-  shares: number;
-  saves: number;
-}
-
-export interface ICard extends Document {
-  ownerId: Types.ObjectId;
+export interface ICard {
+  userId: Types.ObjectId;          // owner
   title?: string;
   slug?: string;
-  theme?: string;
-  data?: any;
-  isPublic: boolean;
-
-  // NEW: make these part of the interface
-  keywords?: string[];
-  tags?: string[];
-
-  analytics?: IAnalytics;
-  createdAt: Date;
-  updatedAt: Date;
+  data?: Record<string, unknown>;  // arbitrary structured data for your card sections
+  visibility?: "private" | "unlisted" | "public";
+  shareToken?: string | null;      // if you support tokenized share links
+  // Allow extra fields without breaking builds where TS sees more props:
+  [key: string]: any;
 }
 
-const AnalyticsSchema = new Schema<IAnalytics>(
-  {
-    views: { type: Number, default: 0 },
-    clicks: { type: Number, default: 0 },
-    shares: { type: Number, default: 0 },
-    saves: { type: Number, default: 0 },
-  },
-  { _id: false }
-);
+export type CardDoc = HydratedDocument<ICard>;
+type CardModel = Model<ICard>;
 
-const CardSchema = new Schema<ICard>(
+const CardSchema = new Schema<ICard, CardModel>(
   {
-    ownerId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    title: { type: String, trim: true, default: "Untitled" },
-    slug: { type: String, trim: true, index: true, unique: false },
-    theme: { type: String, trim: true, default: "luxe" },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    title: { type: String, trim: true },
+    slug: { type: String, trim: true, index: true },
     data: { type: Schema.Types.Mixed, default: {} },
-    isPublic: { type: Boolean, default: false },
-
-    // NEW: persist keywords/tags
-    keywords: { type: [String], default: [] },
-    tags: { type: [String], default: [] },
-
-    analytics: { type: AnalyticsSchema, default: () => ({}) },
+    visibility: {
+      type: String,
+      enum: ["private", "unlisted", "public"],
+      default: "private",
+      index: true,
+    },
+    shareToken: { type: String, default: null, index: true },
   },
   { timestamps: true }
 );
 
-// helpful indexes
-CardSchema.index({ title: "text", tags: "text", keywords: "text" });
+// Add helpful compound index if you query by owner+slug
+CardSchema.index({ userId: 1, slug: 1 }, { unique: false });
 
-export default mongoose.model<ICard>("Card", CardSchema);
+export const Card = model<ICard, CardModel>("Card", CardSchema);

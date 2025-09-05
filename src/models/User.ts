@@ -1,21 +1,36 @@
-import { Schema, model, Document } from "mongoose";
+// src/models/user.ts
+import { Schema, model, Model, HydratedDocument } from "mongoose";
+import bcrypt from "bcryptjs";
 
-export interface IUser extends Document {
+export interface IUser {
   email: string;
-  passwordHash: string;
+  password: string;       // hashed
   name?: string;
-  phone?: string;               // <— add this
-  createdAt: Date;
 }
 
-const UserSchema = new Schema<IUser>(
+export interface IUserMethods {
+  comparePassword(candidate: string): Promise<boolean>;
+}
+
+// Helpful hydrated doc type for downstream casts
+export type UserDoc = HydratedDocument<IUser, IUserMethods>;
+
+type UserModel = Model<IUser, {}, IUserMethods>;
+
+const UserSchema = new Schema<IUser, UserModel, IUserMethods>(
   {
-    email: { type: String, required: true, unique: true, index: true },
-    passwordHash: { type: String, required: true },
-    name: { type: String, default: "" },
-    phone: { type: String, index: true, sparse: true },   // <— add this
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true, select: false }, // select:false is fine
+    name: { type: String },
   },
-  { timestamps: { createdAt: true, updatedAt: true } }
+  { timestamps: true }
 );
 
-export default model<IUser>("User", UserSchema);
+UserSchema.methods.comparePassword = async function (candidate: string) {
+  const user = this as UserDoc;
+  // if password was not selected, comparison can’t be done
+  if (!user.password) return false;
+  return bcrypt.compare(candidate, user.password);
+};
+
+export const User = model<IUser, UserModel>("User", UserSchema);
