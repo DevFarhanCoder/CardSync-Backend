@@ -7,7 +7,7 @@ import morgan from "morgan";
 import mongoose from "mongoose";
 
 import routes from "./routes/index.js";   // aggregator for other /api routes
-import { registerSocket } from "./socket";
+import { registerSocket } from "./socket.js";
 import cardsRouter from "./routes/cards.js";
 import requireAuth from "./middlewares/auth.js";
 const app = express();
