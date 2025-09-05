@@ -1,21 +1,24 @@
-import { Schema, model, Types, Document } from "mongoose";
+import { Schema, model, Document, Types } from "mongoose";
 
 export interface IChatMessage extends Document {
   roomId: Types.ObjectId;
   userId: Types.ObjectId;
-  text: string;
+  text?: string;
+  kind: "text" | "card";
+  payload?: any;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 const ChatMessageSchema = new Schema<IChatMessage>(
   {
     roomId: { type: Schema.Types.ObjectId, ref: "ChatRoom", required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    text: { type: String, required: true, trim: true, maxlength: 4000 },
+    text: { type: String, default: "" },
+    kind: { type: String, enum: ["text", "card"], default: "text", index: true },
+    payload: { type: Schema.Types.Mixed, default: null },
   },
-  { timestamps: { createdAt: true, updatedAt: false } }
+  { timestamps: true }
 );
-
-ChatMessageSchema.index({ roomId: 1, _id: 1 });
 
 export default model<IChatMessage>("ChatMessage", ChatMessageSchema);

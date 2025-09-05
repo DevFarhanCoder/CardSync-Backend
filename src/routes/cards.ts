@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { createCard, updateCard, getCardById, shareCardLink } from "../controllers/cards.js";
-// Auth is already applied in index.ts at mount time; don't re-apply here unless you prefer both.
+import { requireAuth } from "../middlewares/requireAuth.js";
+
 const router = Router();
 
 /**
@@ -10,6 +11,8 @@ const router = Router();
  * GET    /api/cards/:id
  * POST   /api/cards/:id/share
  */
+router.use(requireAuth);       // <— add this, controllers can rely on req.user
+
 router.post("/", createCard);
 router.put("/:id", updateCard);
 router.get("/:id", getCardById);

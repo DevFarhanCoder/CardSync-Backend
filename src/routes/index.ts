@@ -8,17 +8,26 @@ import profileRoutes from "./profile.js";
 import publicRoutes from "./public.js";
 import chatRoutes from "./chat.js";
 import groupRoutes from "./groups.js";
+import sharesRoutes from "./shares.js";
+import contactsRoutes from "./contacts.js";
 
 const router = Router();
+
 router.get("/health", (_req, res) => res.json({ ok: true }));
 router.use("/health", healthRoutes);
+
 router.use("/", analyticsRoutes);
 router.use("/auth", authRoutes);
-router.use("/", cardsRoutes);
+
+/* ⬇️ This was `"/"` — change to `"/cards"` so endpoints become /api/cards */
+router.use("/cards", cardsRoutes);
+
 router.use("/explore", exploreRoutes);
 router.use("/profile", profileRoutes);
-router.use("/public", publicRoutes);
-router.use("/chat", chatRoutes);
-router.use("/", groupRoutes); 
+router.use("/", publicRoutes);
+router.use("/", chatRoutes);
+router.use("/", groupRoutes);
+router.use("/", sharesRoutes);
+router.use("/", contactsRoutes);
 
 export default router;

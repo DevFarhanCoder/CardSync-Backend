@@ -10,6 +10,7 @@ import routes from "./routes/index.js";   // aggregator for other /api routes
 import { registerSocket } from "./socket.js";
 import cardsRouter from "./routes/cards.js";
 import requireAuth from "./middlewares/auth.js";
+
 const app = express();
 
 
@@ -19,11 +20,8 @@ const allowedOrigins = [
   "https://instantllycards.com"  // add your real frontend domain here
 ];
 
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-}));
-                // add { origin: ["http://localhost:3000"], credentials: true } if using cookies
+app.use(cors({ origin: "http://localhost:3000", credentials: true }));
+
 app.use(express.json());
 app.use(morgan("tiny"));
 app.use("/uploads", express.static("uploads"));
