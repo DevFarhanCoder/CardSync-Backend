@@ -25,6 +25,68 @@ function sanitize(doc: any) {
   };
 }
 
+export const searchPublic: RequestHandler = async (req, res) => {
+  const qRaw = (req.query.q as string) || "";
+  const q = qRaw.trim();
+  const limit = Math.min(parseInt(String(req.query.limit || "20"), 10) || 20, 100);
+  const page = Math.max(parseInt(String(req.query.page || "1"), 10) || 1, 1);
+  const skip = (page - 1) * limit;
+
+  const filter: any = { isPublic: true };
+
+  // Prefer text search if available and query is non-empty, otherwise fallback to regex
+  if (q) {
+    filter.$or = [
+      { title: { $regex: q, $options: "i" } },
+      { tags: { $elemMatch: { $regex: q, $options: "i" } } },
+      { keywords: { $elemMatch: { $regex: q, $options: "i" } } },
+    ];
+  }
+
+  const [total, docs] = await Promise.all([
+    Card.countDocuments(filter),
+    Card.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+  ]);
+
+  return res.json({
+    query: q,
+    page,
+    limit,
+    total,
+    results: docs.map((d) => sanitize(d)),
+  });
+};
+
+// GET /api/public/profile/:owner/cards
+// :owner can be a Mongo ObjectId string (your user's _id)
+export const getPublicCards: RequestHandler = async (req, res) => {
+  const { owner } = req.params;
+
+  if (!owner || !mongoose.isValidObjectId(owner)) {
+    return res.status(400).json({ message: "Invalid or missing owner id" });
+  }
+
+  const ownerId = new mongoose.Types.ObjectId(owner);
+  const limit = Math.min(parseInt(String(req.query.limit || "50"), 10) || 50, 100);
+  const page = Math.max(parseInt(String(req.query.page || "1"), 10) || 1, 1);
+  const skip = (page - 1) * limit;
+
+  const filter = { ownerId, isPublic: true };
+
+  const [total, docs] = await Promise.all([
+    Card.countDocuments(filter),
+    Card.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit),
+  ]);
+
+  return res.json({
+    owner: String(ownerId),
+    page,
+    limit,
+    total,
+    cards: docs.map((d) => sanitize(d)),
+  });
+};
+
 export const createCard: RequestHandler = async (req, res) => {
   const userId = req.user?._id; // typed from declaration merging
   if (!userId) return res.status(401).json({ message: "Unauthorized" });

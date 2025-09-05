@@ -1,36 +1,34 @@
 // src/middlewares/auth.ts
-import type { Request, Response, NextFunction } from "express";
+import type { RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+const getSecret = () => process.env.JWT_SECRET || "";
 
-interface TokenPayload {
-  sub?: string;
-  id?: string;
-  userId?: string;
-  _id?: string;
-  email?: string;
-  // ...any other claims you put in the token
-}
-
-export default function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const h = req.headers.authorization || "";
-  const token = h.startsWith("Bearer ") ? h.slice(7) : "";
-
-  if (!token) return res.status(401).json({ message: "Unauthorized" });
-
+export const requireAuth: RequestHandler = (req, res, next) => {
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as TokenPayload;
+    const JWT_SECRET = getSecret();
+    if (!JWT_SECRET) {
+      // Don’t crash the server; return 500 so the problem is visible
+      return res.status(500).json({ message: "Server misconfigured: JWT_SECRET is not set" });
+    }
 
-    // normalize to a definite string id; if not present, reject
-    const uid =
-      payload.sub || payload.id || payload.userId || payload._id || "";
+    let token: string | undefined;
+    const auth = req.headers.authorization;
+    if (auth && auth.startsWith("Bearer ")) token = auth.slice(7).trim();
+    if (!token && typeof req.headers["x-auth-token"] === "string") token = String(req.headers["x-auth-token"]);
+    if (!token && (req as any).cookies?.token) token = (req as any).cookies.token;
 
-    if (!uid) return res.status(401).json({ message: "Unauthorized" });
+    if (!token) return res.status(401).json({ message: "Unauthorized: no token" });
 
-    req.user = { _id: String(uid), email: payload.email };
+    const payload = jwt.verify(token, JWT_SECRET) as any;
+    const userId = payload._id || payload.sub || payload.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized: token missing user id" });
+
+    (req as any).user = { _id: String(userId), email: payload.email, role: payload.role };
     next();
-  } catch {
-    return res.status(401).json({ message: "Unauthorized" });
+  } catch (err: any) {
+    return res.status(401).json({ message: "Unauthorized", detail: err?.message || "invalid token" });
   }
-}
+};
+
+export default requireAuth;

@@ -1,24 +1,41 @@
 import dotenv from "dotenv";
 dotenv.config();
-
+console.log("JWT_SECRET loaded?", !!process.env.JWT_SECRET);
 import express, { ErrorRequestHandler } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import mongoose from "mongoose";
 
-import routes from "./routes/index.js";   // <-- single aggregator for all /api routes
+import routes from "./routes/index.js";   // aggregator for other /api routes
 import { registerSocket } from "./socket";
-// src/index.ts
-
-
+import cardsRouter from "./routes/cards.js";
+import requireAuth from "./middlewares/auth.js";
 const app = express();
 
-/* Middleware */
-app.use(cors());                          // add options here if you want to restrict origins
+
+const allowedOrigins = [
+  "http://localhost:3000",        // Vite frontend
+  "http://127.0.0.1:3000",        // sometimes vite uses this
+  "https://instantllycards.com"  // add your real frontend domain here
+];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}));
+                // add { origin: ["http://localhost:3000"], credentials: true } if using cookies
 app.use(express.json());
 app.use(morgan("tiny"));
-app.use("/api", routes);
 app.use("/uploads", express.static("uploads"));
+
+/* Mount cards under /api/cards (auth here so router doesn't need to repeat it) */
+app.use("/api/cards", requireAuth, cardsRouter);
+
+/* Mount the rest of your /api routes once (no duplicates) */
+app.use("/api", routes);
+
+/* Simple health checks */
+app.get("/health", (_req, res) => res.json({ ok: true }));
 
 async function start() {
   try {
@@ -26,13 +43,6 @@ async function start() {
     if (!uri) throw new Error("Missing MONGODB_URI");
     await mongoose.connect(uri, { dbName: process.env.MONGODB_DB || undefined });
     console.log("✅ Mongo connected");
-
-    /* Mount everything under /api */
-    app.use("/api", routes);
-
-    /* Simple health checks */
-    app.get("/health", (_req, res) => res.json({ ok: true }));      // plain health
-    // /api/health is handled by routes/index.ts (see below)
 
     const http = await import("http");
     const server = http.createServer(app);
