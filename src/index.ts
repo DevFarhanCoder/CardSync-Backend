@@ -1,6 +1,8 @@
+import { env } from "./config/env.js";
 import dotenv from "dotenv";
 dotenv.config();
 console.log("JWT_SECRET loaded?", !!process.env.JWT_SECRET);
+
 import express, { ErrorRequestHandler } from "express";
 import cors from "cors";
 import morgan from "morgan";
@@ -13,14 +15,25 @@ import requireAuth from "./middlewares/auth.js";
 
 const app = express();
 
+// ❌ REMOVE: unused constant & duplicate CORS
+// const allowedOrigins = [
+//   "http://localhost:3000",
+//   "http://127.0.0.1:3000",
+//   "https://instantllycards.com"
+// ];
 
-const allowedOrigins = [
-  "http://localhost:3000",        // Vite frontend
-  "http://127.0.0.1:3000",        // sometimes vite uses this
-  "https://instantllycards.com"  // add your real frontend domain here
-];
+// ❌ REMOVE this hardcoded CORS (it overrides prod)
+// app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 
-app.use(cors({ origin: "http://localhost:3000", credentials: true }));
+// ✅ KEEP a single, env-driven CORS:
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // server-to-server, Postman, etc.
+    if (env.corsOrigin.includes(origin)) return cb(null, true);
+    return cb(new Error("Not allowed by CORS"));
+  },
+  credentials: true
+}));
 
 app.use(express.json());
 app.use(morgan("tiny"));
@@ -35,6 +48,13 @@ app.use("/api", routes);
 /* Simple health checks */
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+/* Error handler (keep after routes) */
+const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  console.error(err);
+  res.status(500).json({ error: "Server error" });
+};
+app.use(errorHandler);
+
 async function start() {
   try {
     const uri = process.env.MONGODB_URI as string;
@@ -44,14 +64,7 @@ async function start() {
 
     const http = await import("http");
     const server = http.createServer(app);
-    registerSocket(server);
-
-    /* Error handler */
-    const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
-      console.error(err);
-      res.status(500).json({ error: "Server error" });
-    };
-    app.use(errorHandler);
+    registerSocket(server); // your socket.js already sets permissive CORS
 
     const port = Number(process.env.PORT || 8080);
     server.listen(port, () =>
