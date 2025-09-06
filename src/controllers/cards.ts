@@ -1,3 +1,4 @@
+import type { RequestHandler } from "express";
 import type { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Card } from '../models/Card.js';
@@ -82,29 +83,46 @@ export const searchPublic = async (req: Request, res: Response) => {
 };
 
 /** POST /api/cards/:id/share  (optional helper if your route expects shareCardLink) */
-export const shareCardLink = async (req: { params: { id: any; }; }, res: { status: (arg0: number) => { (): any; new(): any; json: { (arg0: { message: string; }): any; new(): any; }; }; json: (arg0: { shareUrl: string; shareToken: string; }) => any; }) => {
-  const { id } = req.params;
-  const owner = (req as any).userId || (req as any).user?.id;
+export const shareCardLink: RequestHandler<{ id: string }> = async (req, res) => {
+  try {
+    const owner = (req as any).userId || (req as any).user?.id;
+    if (!owner) return res.status(401).json({ message: "Unauthorized" });
 
-  const card = await Card.findOne({ _id: id, userId: owner });
-  if (!card) return res.status(404).json({ message: "Not found" });
+    const { id } = req.params;
 
-  // ensure slug exists
-  if (!card.slug) await card.save();
+    const card = await Card.findOne({ _id: id, userId: owner });
+    if (!card) return res.status(404).json({ message: "Not found" });
 
-  const user = await User.findById(owner).lean();
-  if (!user) return res.status(404).json({ message: "User not found" });
+    // ensure a slug exists for pretty urls (if you added slugs)
+    if (!(card as any).slug) {
+      await card.save(); // your pre('validate') can fill slug
+    }
 
-  // optionally keep token/visibility changes if you still want “unlisted”
-  const token = Math.random().toString(36).slice(2, 10);
-  await Card.updateOne({ _id: id }, { $set: { shareToken: token, visibility: "unlisted" } });
+    const user = await User.findById(owner).lean();
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-  const base = (process.env.PUBLIC_WEB_BASE ||
-               (process.env.FRONTEND_URL || "").split(",")[0] ||
-               "https://instantlycards.com").replace(/\/+$/,"");
+    // keep “unlisted” + token if you want link privacy
+    const shareToken = Math.random().toString(36).slice(2, 10);
+    await Card.updateOne(
+      { _id: id },
+      { $set: { shareToken, visibility: "unlisted" } }
+    );
 
-  const shareUrl = `${base}/${user.handle}/${card.slug}`;
-  return res.json({ shareUrl, shareToken: token });
+    const base = (
+      process.env.PUBLIC_WEB_BASE ||
+      (process.env.FRONTEND_URL || "").split(",")[0] ||
+      "https://instantlycards.com"
+    ).replace(/\/+$/, "");
+
+    const slug = (card as any).slug || "card";
+    const handle = (user as any).handle || "user";
+    const shareUrl = `${base}/${handle}/${slug}`;
+
+    res.json({ shareUrl, shareToken });
+  } catch (err) {
+    console.error("shareCardLink error:", err);
+    res.status(500).json({ message: "Internal error" });
+  }
 };
 
 
