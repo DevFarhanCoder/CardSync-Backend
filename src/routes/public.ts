@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { User } from '../models/User';
-import { Card } from '../models/Card';
+import { User } from '../models/User.js';
+import { Card } from '../models/Card.js';
 
 const publicRouter = Router();
 

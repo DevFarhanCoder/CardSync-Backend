@@ -1,6 +1,6 @@
 import { Router } from "express";
-import requireAuth from "../middlewares/auth";
-import ensureOwner from "../middlewares/ensureOwner";
+import requireAuth from "../middlewares/auth.js";
+import ensureOwner from "../middlewares/ensureOwner.js";
 import {
   listMyCards,
   getCard,           // our canonical getter

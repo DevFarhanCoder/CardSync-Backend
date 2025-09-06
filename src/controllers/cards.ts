@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { Types } from "mongoose";
-import { Card } from '../models/Card';
+import { Card } from '../models/Card.js';
 
 
 /** GET /api/cards */

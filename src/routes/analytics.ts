@@ -1,6 +1,6 @@
 import { Router } from "express";
-import requireAuth from "../middlewares/auth";
-import { overview, topTitles } from "../controllers/analytics";
+import requireAuth from "../middlewares/auth.js";
+import { overview, topTitles } from "../controllers/analytics.js";
 
 const router = Router();
 

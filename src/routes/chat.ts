@@ -1,7 +1,7 @@
 import { Router } from "express";
-import requireAuth from "../middlewares/auth";
-import { User } from '../models/User';
-import { Card } from '../models/Card';
+import requireAuth from "../middlewares/auth.js";
+import { User } from '../models/User.js';
+import { Card } from '../models/Card.js';
 
 
 const router = Router();
