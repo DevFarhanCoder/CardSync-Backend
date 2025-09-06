@@ -80,4 +80,61 @@ router.post("/chat/messages", async (req: Request, res: Response, next: NextFunc
   } catch (e) { next(e); }
 });
 
+router.get("/chat/rooms/:roomId/messages", async (req, res, next) => {
+  try {
+    const { roomId } = req.params;
+    if (!mongoose.isValidObjectId(roomId)) {
+      return res.status(400).json({ message: "roomId invalid" });
+    }
+    const sinceStr = req.query.since ? String(req.query.since) : "";
+    const since = sinceStr ? new Date(sinceStr) : null;
+
+    const q: any = { roomId };
+    if (since && !isNaN(since.getTime())) q.createdAt = { $gt: since };
+
+    const msgs = await ChatMessage.find(q).sort({ createdAt: 1 }).limit(200).lean();
+    res.json({
+      messages: msgs.map(m => ({
+        id: String(m._id),
+        roomId: String(m.roomId),
+        userId: String(m.userId),
+        text: m.text || "",
+        kind: (m as any).kind || "text",
+        payload: (m as any).payload || null,
+        createdAt: m.createdAt,
+      })),
+    });
+  } catch (e) { next(e); }
+});
+
+router.post("/chat/rooms/:roomId/messages", async (req, res, next) => {
+  try {
+    const { roomId } = req.params;
+    if (!mongoose.isValidObjectId(roomId)) {
+      return res.status(400).json({ message: "roomId invalid" });
+    }
+    const { text = "", kind = "text", payload = null } =
+      (req.body || {}) as { text?: string; kind?: "text" | "card"; payload?: any };
+
+    const msg = await ChatMessage.create({
+      roomId,
+      userId: req.user!.id,
+      text,
+      kind,
+      payload,
+    });
+
+    res.json({
+      message: {
+        id: String(msg._id),
+        roomId: String(msg.roomId),
+        userId: String(msg.userId),
+        text: msg.text || "",
+        kind,
+        payload,
+        createdAt: msg.createdAt,
+      },
+    });
+  } catch (e) { next(e); }
+});
 export default router;
