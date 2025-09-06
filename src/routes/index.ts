@@ -10,6 +10,7 @@ import chatRoutes from "./chat.js";
 import groupRoutes from "./groups.js";
 import sharesRoutes from "./shares.js";
 import contactsRoutes from "./contacts.js";
+import chatCompatRoutes from "./chatCompat.js";
 
 const router = Router();
 
@@ -29,5 +30,6 @@ router.use("/", chatRoutes);
 router.use("/", groupRoutes);
 router.use("/", sharesRoutes);
 router.use("/", contactsRoutes);
+router.use("/", chatCompatRoutes); 
 
 export default router;
