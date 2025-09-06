@@ -96,8 +96,8 @@ export const shareCardLink = async (req: Request & { userId?: string }, res: Res
 
   const base =
     (process.env.PUBLIC_WEB_BASE ||
-     (process.env.FRONTEND_URL || "").split(",")[0] ||
-     "https://instantlycards.com").replace(/\/+$/,"");
+      (process.env.FRONTEND_URL || "").split(",")[0] ||
+      "https://instantlycards.com").replace(/\/+$/, "");
 
   const shareUrl = `${base}/share/${id}?t=${token}`;
   res.json({ shareToken: token, shareUrl });
