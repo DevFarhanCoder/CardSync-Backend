@@ -9,7 +9,7 @@ import {
   updateCard,
   removeCard,
   shareCardLink,    // optional helper if you expose share
-} from "../controllers/cards";
+} from "../controllers/cards.js";
 
 const router = Router();
 
