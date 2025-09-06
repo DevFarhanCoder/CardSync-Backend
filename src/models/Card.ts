@@ -1,5 +1,6 @@
 // src/models/card.ts
 import { Schema, model, Model, HydratedDocument, Types } from "mongoose";
+import { slugify } from "../utils/slug.js";
 
 export interface ICard {
   userId: Types.ObjectId;          // owner
@@ -34,5 +35,17 @@ const CardSchema = new Schema<ICard, CardModel>(
 
 // Add helpful compound index if you query by owner+slug
 CardSchema.index({ userId: 1, slug: 1 }, { unique: false });
+
+CardSchema.pre("validate", async function (next) {
+  if (!this.slug) {
+    const base = slugify(this.title || "card");
+    let s = base, i = 0;
+    while (await (this.constructor as any).exists({ userId: this.userId, slug: s })) {
+      i += 1; s = `${base}-${i}`;
+    }
+    this.slug = s;
+  }
+  next();
+});
 
 export const Card = model<ICard, CardModel>("Card", CardSchema);

@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { User } from '../models/User.js';
 import { Card } from '../models/Card.js';
+import { getPublicProfileByHandle, getPublicCardBySlug } from "../controllers/public.js";
 
 const publicRouter = Router();
+
+publicRouter.get("/profile/:handle", getPublicProfileByHandle);
+publicRouter.get("/card/:handle/:slug", getPublicCardBySlug);
 
 /** profile header */
 publicRouter.get("/public/user/:id", async (req, res, next) => {
