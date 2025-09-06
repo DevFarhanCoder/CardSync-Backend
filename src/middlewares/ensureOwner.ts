@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { Card } from "../models/card";
+import { Card } from '../models/Card';
 
 export default async function ensureOwner(
   req: Request & { userId?: string },

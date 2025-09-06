@@ -1,6 +1,6 @@
 // src/routes/contacts.ts
 import { Router, type Request, type Response, type NextFunction } from "express";
-import User from "../models/User.js";
+import { User } from '../models/User';
 import { requireAuth } from "../middlewares/requireAuth.js";
 
 const contactsRouter = Router();

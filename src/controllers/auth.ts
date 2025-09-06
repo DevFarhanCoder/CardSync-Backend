@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import * as jwt from "jsonwebtoken";
-import { User, UserDoc } from "../models/user";
+import { User, UserDoc } from '../models/User';
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "7d") as jwt.SignOptions["expiresIn"];

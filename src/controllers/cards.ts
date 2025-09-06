@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Types } from "mongoose";
-import { Card } from "../models/card";
+import { Card } from '../models/Card';
+
 
 /** GET /api/cards */
 export const listMyCards = async (req: Request & { userId?: string }, res: Response) => {
