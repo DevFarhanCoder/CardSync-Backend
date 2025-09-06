@@ -1,12 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import { Card } from '../models/Card.js';
 
-export default async function ensureOwner(
-  req: Request & { userId?: string },
-  res: Response,
-  next: NextFunction
-) {
-  const owner = req.userId as string;
+export default async function ensureOwner(req: Request & { userId?: string }, res: Response, next: NextFunction) {
+  const owner = (req as any).userId || (req as any).user?.id;   // <-- fallback
   const { id } = req.params;
   if (!owner) return res.status(401).json({ message: "Unauthorized" });
 
@@ -14,3 +10,4 @@ export default async function ensureOwner(
   if (!exists) return res.status(403).json({ message: "Forbidden" });
   next();
 }
+
