@@ -81,9 +81,10 @@ export const searchPublic = async (req: Request, res: Response) => {
 };
 
 /** POST /api/cards/:id/share  (optional helper if your route expects shareCardLink) */
-export const shareCardLink = async (req: { params: { id: any; }; userId: string; }, res: { status: (arg0: number) => { (): any; new(): any; json: { (arg0: { message: string; }): any; new(): any; }; }; json: (arg0: { shareToken: string; shareUrl: string; }) => void; }) => {
+export const shareCardLink = async (req: Request & { userId?: string }, res: Response) => {
   const { id } = req.params;
   const owner = req.userId as string;
+
   const token = Math.random().toString(36).slice(2, 10);
   const doc = await Card.findOneAndUpdate(
     { _id: id, userId: owner },
