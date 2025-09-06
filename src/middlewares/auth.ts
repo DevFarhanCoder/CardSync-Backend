@@ -40,6 +40,7 @@ const requireAuth: RequestHandler = (req, res, next) => {
     }
 
     (req as any).user = user;
+    (req as any).userId = user.id;  
     next();
   } catch (err: any) {
     return res.status(401).json({ message: "Unauthorized", detail: err?.message || "invalid token" });

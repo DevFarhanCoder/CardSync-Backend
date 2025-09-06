@@ -81,10 +81,9 @@ export const searchPublic = async (req: Request, res: Response) => {
 };
 
 /** POST /api/cards/:id/share  (optional helper if your route expects shareCardLink) */
-export const shareCardLink = async (req: Request & { userId?: string }, res: Response) => {
+export const shareCardLink = async (req: { params: { id: any; }; userId: string; }, res: { status: (arg0: number) => { (): any; new(): any; json: { (arg0: { message: string; }): any; new(): any; }; }; json: (arg0: { shareToken: string; shareUrl: string; }) => void; }) => {
   const { id } = req.params;
   const owner = req.userId as string;
-
   const token = Math.random().toString(36).slice(2, 10);
   const doc = await Card.findOneAndUpdate(
     { _id: id, userId: owner },
@@ -93,5 +92,13 @@ export const shareCardLink = async (req: Request & { userId?: string }, res: Res
   ).lean();
 
   if (!doc) return res.status(404).json({ message: "Not found" });
-  res.json({ shareToken: token });
+
+  const base =
+    (process.env.PUBLIC_WEB_BASE ||
+     (process.env.FRONTEND_URL || "").split(",")[0] ||
+     "https://instantlycards.com").replace(/\/+$/,"");
+
+  const shareUrl = `${base}/share/${id}?t=${token}`;
+  res.json({ shareToken: token, shareUrl });
 };
+

@@ -17,7 +17,7 @@ const router = Router();
 router.get("/health", (_req, res) => res.json({ ok: true }));
 router.use("/health", healthRoutes);
 
-router.use("/", analyticsRoutes);
+router.use("/analytics", analyticsRoutes);
 router.use("/auth", authRoutes);
 
 /* ⬇️ This was `"/"` — change to `"/cards"` so endpoints become /api/cards */
