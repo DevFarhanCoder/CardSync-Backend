@@ -21,7 +21,7 @@ export async function register(req: Request, res: Response) {
     if (existing) return res.status(400).json({ error: "Email already in use" });
 
     const passwordHash = await hashPassword(password);
-    const user = await User.create({ fullName, email, passwordHash });
+    const user = await User.create({ fullName, name: fullName, email, passwordHash });
 
     const token = signToken(user.id);
     return res.status(201).json({
