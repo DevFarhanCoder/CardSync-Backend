@@ -7,6 +7,7 @@ import express, { ErrorRequestHandler } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import mongoose from "mongoose";
+import deletionRouter from "./routes/deletion.js";
 
 import routes from "./routes/index.js";   // aggregator for other /api routes
 import { registerSocket } from "./socket.js";
@@ -44,6 +45,9 @@ app.use("/api/cards", requireAuth, cardsRouter);
 
 /* Mount the rest of your /api routes once (no duplicates) */
 app.use("/api", routes);
+
+/* Mount deletion request route */
+app.use("/api/account-deletion", deletionRouter);
 
 /* Simple health checks */
 app.get("/health", (_req, res) => res.json({ ok: true }));
