@@ -1,6 +1,6 @@
 // src/middlewares/requireAuth.ts
 import type { RequestHandler } from "express";
-import jwt from "jsonwebtoken";
+import { verifyJwt } from "../utils/jwt";
 
 const getSecret = () => process.env.JWT_SECRET || "";
 
@@ -9,8 +9,8 @@ const pickUserId = (p: any) => p?._id || p?.sub || p?.id || p?.userId || p?.uid;
 const buildUser = (payload: any) => {
   const uid = String(pickUserId(payload) || "");
   return {
-    id: uid,          // for routes using req.user.id
-    _id: uid,         // for controllers using req.user._id
+    id: uid,              // for routes using req.user.id
+    _id: uid,             // for controllers using req.user._id
     email: payload?.email,
     role: payload?.role,
   };
@@ -32,7 +32,8 @@ const requireAuth: RequestHandler = (req, res, next) => {
 
     if (!token) return res.status(401).json({ message: "Unauthorized: no token" });
 
-    const payload = jwt.verify(token, JWT_SECRET) as any;
+    // ✅ use our wrapper (works in ESM/CJS)
+    const payload = verifyJwt<any>(token, JWT_SECRET);
     const user = buildUser(payload);
 
     if (!user.id) {
@@ -40,7 +41,7 @@ const requireAuth: RequestHandler = (req, res, next) => {
     }
 
     (req as any).user = user;
-    (req as any).userId = user.id;  
+    (req as any).userId = user.id;
     next();
   } catch (err: any) {
     return res.status(401).json({ message: "Unauthorized", detail: err?.message || "invalid token" });
