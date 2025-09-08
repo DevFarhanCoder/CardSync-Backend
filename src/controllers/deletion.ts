@@ -1,6 +1,6 @@
 // src/controllers/deletion.ts
 import { Request, Response } from "express";
-import { DeletionRequest } from "../models/DeletionRequest";
+import { DeletionRequest } from "../models/DeletionRequest.js";
 import { sendDeletionRequestMail } from "../utils/mailer.js";
 
 export async function createDeletionRequest(req: Request, res: Response) {
