@@ -1,6 +1,6 @@
 // src/middlewares/requireAuth.ts
 import type { RequestHandler } from "express";
-import { verifyJwt } from "../utils/jwt";
+import { verifyJwt } from "../utils/jwt.js";
 
 const getSecret = () => process.env.JWT_SECRET || "";
 

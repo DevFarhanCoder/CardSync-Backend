@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import { User } from "../models/User";
-import { hashPassword, comparePassword } from "../utils/hash";
-import { signJwt } from "../utils/jwt";
+import { User } from "../models/User.js";
+import { hashPassword, comparePassword } from "../utils/hash.js";
+import { signJwt } from "../utils/jwt.js";
 
 function signToken(userId: string) {
   const secret = process.env.JWT_SECRET!;
