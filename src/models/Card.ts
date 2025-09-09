@@ -1,15 +1,14 @@
-// src/models/card.ts
+// src/models/Card.ts
 import { Schema, model, Model, HydratedDocument, Types } from "mongoose";
 import { slugify } from "../utils/slug.js";
 
 export interface ICard {
-  userId: Types.ObjectId;          // owner
+  userId: Types.ObjectId;          // owner (current backend uses userId)
   title?: string;
   slug?: string;
-  data?: Record<string, unknown>;  // arbitrary structured data for your card sections
+  data?: Record<string, unknown>;
   visibility?: "private" | "unlisted" | "public";
-  shareToken?: string | null;      // if you support tokenized share links
-  // Allow extra fields without breaking builds where TS sees more props:
+  shareToken?: string | null;
   [key: string]: any;
 }
 
@@ -18,7 +17,7 @@ type CardModel = Model<ICard>;
 
 const CardSchema = new Schema<ICard, CardModel>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     title: { type: String, trim: true },
     slug: { type: String, trim: true, index: true },
     data: { type: Schema.Types.Mixed, default: {} },
@@ -33,15 +32,26 @@ const CardSchema = new Schema<ICard, CardModel>(
   { timestamps: true }
 );
 
-// Add helpful compound index if you query by owner+slug
-CardSchema.index({ userId: 1, slug: 1 }, { unique: false });
+/**
+ * Enforce uniqueness of slug **per user** (and ignore docs where userId is missing).
+ * This matches your current code-path that always sets userId via requireAuth.
+ * Note: we keep this unique so a user can’t create duplicate slugs accidentally.
+ */
+CardSchema.index(
+  { userId: 1, slug: 1 },
+  { unique: true, partialFilterExpression: { userId: { $type: "objectId" } } }
+);
 
+/** Auto-generate a unique slug for the (userId, title) if not supplied */
 CardSchema.pre("validate", async function (next) {
   if (!this.slug) {
     const base = slugify(this.title || "card");
-    let s = base, i = 0;
+    let s = base;
+    let i = 1;
+    // ensure per-user slug uniqueness
     while (await (this.constructor as any).exists({ userId: this.userId, slug: s })) {
-      i += 1; s = `${base}-${i}`;
+      i += 1;
+      s = `${base}-${i}`;
     }
     this.slug = s;
   }

@@ -1,9 +1,8 @@
-import type { RequestHandler } from "express";
-import type { Request, Response } from "express";
+import type { Request, Response, RequestHandler } from "express";
 import { Types } from "mongoose";
-import { Card } from '../models/Card.js';
+import { Card } from "../models/Card.js";
 import { User } from "../models/User.js";
-
+import { slugify } from "../utils/slug.js";
 
 /** GET /api/cards */
 export const listMyCards = async (req: Request & { userId?: string }, res: Response) => {
@@ -14,8 +13,11 @@ export const listMyCards = async (req: Request & { userId?: string }, res: Respo
     title: d.title ?? "",
     visibility: d.visibility ?? "private",
     updatedAt: d.updatedAt,
+    createdAt: d.createdAt,
+    slug: d.slug ?? "",
+    local: false,
   }));
-  res.json({ cards: out });
+  res.json({ items: out });
 };
 
 /** GET /api/cards/:id */
@@ -33,14 +35,31 @@ export const getCardById = getCard;
 /** POST /api/cards */
 export const createCard = async (req: Request & { userId?: string }, res: Response) => {
   const owner = req.userId as string;
+  if (!owner) return res.status(401).json({ message: "Unauthorized" });
+
   const payload = req.body as any;
+
+  // Normalize title/slug
+  const title = (payload?.title ?? "Card Title").toString().trim();
+  const providedSlug = (payload?.slug ?? "").toString().trim();
+  const base = providedSlug ? slugify(providedSlug) : slugify(title) || "card";
+
+  // Ensure per-user uniqueness; bump -2, -3, ... if needed
+  let slug = base;
+  let n = 1;
+  while (await Card.exists({ userId: owner, slug })) {
+    n += 1;
+    slug = `${base}-${n}`;
+  }
+
   const doc = await Card.create({
     userId: new Types.ObjectId(owner),
-    title: payload?.title ?? "",
-    slug: payload?.slug ?? undefined,
+    title,
+    slug,
     data: payload?.data ?? {},
     visibility: payload?.visibility ?? "private",
   });
+
   res.status(201).json({ card: doc });
 };
 
@@ -49,11 +68,21 @@ export const updateCard = async (req: Request & { userId?: string }, res: Respon
   const { id } = req.params;
   const owner = req.userId as string;
   const payload = req.body as any;
-  const doc = await Card.findOneAndUpdate(
-    { _id: id, userId: owner },
-    { $set: payload },
-    { new: true }
-  );
+
+  const update: any = { ...payload };
+
+  if (typeof payload?.title === "string" && payload.title.trim()) {
+    const base = slugify(payload.title.trim()) || "card";
+    let slug = base;
+    let i = 1;
+    while (await Card.exists({ userId: owner, slug, _id: { $ne: id } })) {
+      i += 1;
+      slug = `${base}-${i}`;
+    }
+    update.slug = slug;
+  }
+
+  const doc = await Card.findOneAndUpdate({ _id: id, userId: owner }, { $set: update }, { new: true });
   if (!doc) return res.status(404).json({ message: "Not found" });
   res.json({ card: doc });
 };
@@ -74,55 +103,37 @@ export const searchPublic = async (req: Request, res: Response) => {
   if (q) filter.title = { $regex: q, $options: "i" };
 
   const docs = await Card.find(filter).sort({ updatedAt: -1 }).limit(50).lean();
-  const out = docs.map((d: any) => ({
+  const items = docs.map(d => ({
     id: String(d._id),
     title: d.title ?? "",
-    visibility: d.visibility ?? "public",
+    slug: d.slug ?? "",
   }));
-  res.json({ results: out });
+  res.json({ items });
 };
 
-/** POST /api/cards/:id/share  (optional helper if your route expects shareCardLink) */
-export const shareCardLink: RequestHandler<{ id: string }> = async (req, res) => {
+/** POST /api/cards/:id/share */
+export const shareCardLink: RequestHandler = async (req, res) => {
   try {
-    const owner = (req as any).userId || (req as any).user?.id;
-    if (!owner) return res.status(401).json({ message: "Unauthorized" });
-
     const { id } = req.params;
+    const owner = (req as any).userId as string;
 
     const card = await Card.findOne({ _id: id, userId: owner });
     if (!card) return res.status(404).json({ message: "Not found" });
 
-    // ensure a slug exists for pretty urls (if you added slugs)
-    if (!(card as any).slug) {
-      await card.save(); // your pre('validate') can fill slug
-    }
-
+    // load user for handle/username if you expose public profiles
     const user = await User.findById(owner).lean();
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    // keep “unlisted” + token if you want link privacy
-    const shareToken = Math.random().toString(36).slice(2, 10);
-    await Card.updateOne(
-      { _id: id },
-      { $set: { shareToken, visibility: "unlisted" } }
-    );
-
-    const base = (
-      process.env.PUBLIC_WEB_BASE ||
-      (process.env.FRONTEND_URL || "").split(",")[0] ||
-      "https://instantlycards.com"
-    ).replace(/\/+$/, "");
+    const base =
+      (process.env.PUBLIC_BASE_URL || process.env.FRONTEND_URL || "").split(",")[0]?.trim() ||
+      (process.env.CORS_ORIGIN || "").split(",")[0]?.trim() ||
+      "";
 
     const slug = (card as any).slug || "card";
-    const handle = (user as any).handle || "user";
-    const shareUrl = `${base}/${handle}/${slug}`;
+    const handle = (user as any)?.handle || "user";
+    const shareUrl = `${base.replace(/\/+$/, "")}/${handle}/${slug}`;
 
-    res.json({ shareUrl, shareToken });
+    res.json({ shareUrl, shareToken: null });
   } catch (err) {
     console.error("shareCardLink error:", err);
     res.status(500).json({ message: "Internal error" });
   }
 };
-
-
