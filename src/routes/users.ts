@@ -10,6 +10,8 @@ import requireAuth from "../middlewares/auth.js";
 
 import { User } from "../models/User.js";
 
+import type { FileFilterCallback } from "multer";
+
 const router = Router();
 router.use(requireAuth);
 
@@ -79,18 +81,19 @@ const AVATAR_DIR = path.join(process.cwd(), "uploads", "avatars");
 if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
 
 const upload = multer({
-    storage: multer.diskStorage({
-        destination: (_req, _file, cb) => cb(null, AVATAR_DIR),     // ✅ REQUIRED
-        filename: (_req, file, cb) => {
-            const ext = path.extname(file.originalname || "");
-            cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
-        },
-    }),
-    limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
-        const ok = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.mimetype);
-        cb(ok ? null : new Error("INVALID_IMAGE_TYPE"), ok);
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, AVATAR_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || "");
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
     },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb: FileFilterCallback) => {
+    const ok = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.mimetype);
+    if (ok) return cb(null, true);          // ✅ accept (two args)
+    return cb(new Error("INVALID_IMAGE_TYPE")); // ✅ reject (one arg)
+  },
 });
 
 

@@ -8,6 +8,7 @@ import {
 } from "../controllers/chatGroups.js";
 import { Group } from "../models/Group.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
+import type { FileFilterCallback } from "multer";
 
 const router = Router();
 router.use(requireAuth);
@@ -30,17 +31,17 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const upload = multer({
   storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),     // ✅ ensure destination
-    filename: (_req, file, cb) => {                             // ✅ and filename
+    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+    filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname || "");
-      const name = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
-      cb(null, name);
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req, file, cb: FileFilterCallback) => {
     const ok = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.mimetype);
-    cb(ok ? null : new Error("INVALID_IMAGE_TYPE"), ok);
+    if (ok) return cb(null, true);          // ✅ accept (two args)
+    return cb(new Error("INVALID_IMAGE_TYPE")); // ✅ reject (one arg)
   },
 });
 
