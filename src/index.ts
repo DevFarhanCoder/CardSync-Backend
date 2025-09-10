@@ -1,62 +1,58 @@
 import { env } from "./config/env.js";
 import dotenv from "dotenv";
 dotenv.config();
-console.log("JWT_SECRET loaded?", !!process.env.JWT_SECRET);
 
 import express, { ErrorRequestHandler } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import mongoose from "mongoose";
-import deletionRouter from "./routes/deletion.js";
 
-import routes from "./routes/index.js";   // aggregator for other /api routes
-import { registerSocket } from "./socket.js";
+// Routers / utils
 import cardsRouter from "./routes/cards.js";
-import requireAuth from "./middlewares/auth.js";
 import chatGroupsRouter from "./routes/chatGroups.js";
+import contactsRouter from "./routes/contacts.js";
+import usersRouter from "./routes/users.js";
+import directRouter from "./routes/direct.js";
+import deletionRouter from "./routes/deletion.js";
+import requireAuth from "./middlewares/auth.js";
+import { registerSocket } from "./socket.js";
+import routes from "./routes/index.js";
 
 const app = express();
 
-// ❌ REMOVE: unused constant & duplicate CORS
-// const allowedOrigins = [
-//   "http://localhost:3000",
-//   "http://127.0.0.1:3000",
-//   "https://instantllycards.com"
-// ];
-
-// ❌ REMOVE this hardcoded CORS (it overrides prod)
-// app.use(cors({ origin: "http://localhost:3000", credentials: true }));
-
-// ✅ KEEP a single, env-driven CORS:
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // server-to-server, Postman, etc.
-    if (env.corsOrigin.includes(origin)) return cb(null, true);
-    return cb(new Error("Not allowed by CORS"));
-  },
-  credentials: true
-}));
+// Single, env-based CORS (no duplicates)
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // Postman/server-to-server
+      if (env.corsOrigin.includes(origin)) return cb(null, true);
+      return cb(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 
 app.use(express.json());
 app.use(morgan("tiny"));
+
+// ✅ ESM-safe static serving (no require)
 app.use("/uploads", express.static("uploads"));
 
-/* Mount cards under /api/cards (auth here so router doesn't need to repeat it) */
+// Authenticated cards routes
 app.use("/api/cards", requireAuth, cardsRouter);
 
-/* Mount the rest of your /api routes once (no duplicates) */
-app.use("/api", routes);
-
-/* Mount deletion request route */
+// Other /api routes (no duplicates)
+app.use("/api", usersRouter);
+app.use("/api", directRouter);
+app.use("/api", chatGroupsRouter);
+app.use("/api", contactsRouter);
 app.use("/api/account-deletion", deletionRouter);
 
-/* Mount chat groups route */
-app.use("/api/chat", chatGroupsRouter);
-
-/* Simple health checks */
+// Health
+app.use("/api", routes);
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-/* Error handler (keep after routes) */
+// Error handler
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: "Server error" });
@@ -70,14 +66,12 @@ async function start() {
     await mongoose.connect(uri, { dbName: process.env.MONGODB_DB || undefined });
     console.log("✅ Mongo connected");
 
-    const http = await import("http");
-    const server = http.createServer(app);
-    registerSocket(server); // your socket.js already sets permissive CORS
+    const { createServer } = await import("http");
+    const server = createServer(app);
+    registerSocket(server);
 
     const port = Number(process.env.PORT || 8080);
-    server.listen(port, () =>
-      console.log(`🚀 API listening on http://localhost:${port}`)
-    );
+    server.listen(port, () => console.log(`🚀 API listening on http://localhost:${port}`));
   } catch (err) {
     console.error("❌ Failed to start server:", err);
     process.exit(1);
