@@ -50,9 +50,9 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 /** mount routes (keep order stable) */
 app.use("/api/cards", requireAuth, cardsRouter);
 app.use("/api", routes);
-app.use("/api/users", usersRouter);
+app.use("/api", usersRouter);
 app.use("/api/account-deletion", deletionRouter);
-app.use("/api/chat", chatGroupsRouter);
+app.use("/api", chatGroupsRouter);
 app.use("/api/direct", directRouter);
 app.use("/api", contactsRouter);
 
