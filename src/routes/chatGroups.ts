@@ -1,83 +1,80 @@
 import { Router } from "express";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
-import {
-  listMyGroups, createGroup, getGroupMembers, addMemberByPhone, addMembersBulk,
-  modifyAdmin, removeMember, joinByCode, updateSettings, leaveGroup
-} from "../controllers/chatGroups.js";
-import { Group } from "../models/Group.js";
-import { requireAuth } from "../middlewares/requireAuth.js";
-import type { FileFilterCallback } from "multer";
+import requireAuth from "../middlewares/auth.js";
+import mongoose from "mongoose";
 
 const router = Router();
-router.use(requireAuth);
 
-// ---- core endpoints ----
-router.get("/chat/groups", listMyGroups);
-router.post("/chat/groups", createGroup);
-router.get("/chat/groups/:id/members", getGroupMembers);
-router.post("/chat/groups/:id/members", addMemberByPhone);
-router.post("/chat/groups/:id/members/bulk", addMembersBulk);
-router.post("/chat/groups/:id/admins", modifyAdmin);
-router.post("/chat/groups/:id/members/remove", removeMember);
-router.post("/chat/groups/join", joinByCode);
-router.patch("/chat/groups/:id/settings", updateSettings);
-router.post("/chat/groups/:id/leave", leaveGroup);
-
-// ---- photo upload (admin only) ----
-const UPLOAD_DIR = path.join(process.cwd(), "uploads", "groups");
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname || "");
-      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+/** Minimal ChatGroup model (replace with your actual one if different) */
+const ChatGroup = mongoose.model(
+  "ChatGroup",
+  new mongoose.Schema(
+    {
+      name: { type: String, required: true },
+      description: { type: String, default: "" },
+      photoUrl: { type: String, default: "" },
+      adminIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      memberIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     },
-  }),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb: FileFilterCallback) => {
-    const ok = ["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.mimetype);
-    if (ok) return cb(null, true);          // ✅ accept (two args)
-    return cb(new Error("INVALID_IMAGE_TYPE")); // ✅ reject (one arg)
-  },
+    { timestamps: true }
+  )
+);
+
+/** GET /api/chat/groups */
+router.get("/chat/groups", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const groups = await ChatGroup.find({ memberIds: userId })
+    .sort({ updatedAt: -1 })
+    .lean();
+  res.json(groups.map(g => ({ id: String(g._id), name: g.name, description: g.description, photoUrl: g.photoUrl })));
 });
 
-router.post("/chat/groups/:id/photo", (req, res, next) => {
-  upload.single("photo")(req as any, res as any, async (err: any) => {
-    try {
-      if (err) {
-        if (String(err?.message).includes("INVALID_IMAGE_TYPE")) {
-          return res.status(400).json({ message: "Only JPG/PNG/WEBP/GIF allowed" });
-        }
-        if (String(err?.message).includes("File too large")) {
-          return res.status(413).json({ message: "Image too large (max 5MB)" });
-        }
-        throw err;
-      }
+/** POST /api/chat/groups */
+router.post("/chat/groups", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const { name, description } = req.body ?? {};
+  if (!name) return res.status(400).json({ message: "name is required" });
 
-      const userId = (req as any).userId || (req as any).user?.id;
-      const g = await Group.findById(req.params.id);
-      if (!g) return res.status(404).json({ message: "Group not found" });
-
-      const isAdmin =
-        String(g.ownerId) === String(userId) ||
-        (g.admins || []).some((a) => String(a) === String(userId));
-      if (!isAdmin) return res.status(403).json({ message: "Only admins can update photo." });
-
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-
-      const rel = `/uploads/groups/${req.file.filename}`;
-      g.photoUrl = rel;
-      await g.save();
-
-      return res.json({ ok: true, photoUrl: rel });
-    } catch (e) {
-      next(e);
-    }
+  const g = await ChatGroup.create({
+    name,
+    description: description ?? "",
+    adminIds: [userId],
+    memberIds: [userId],
   });
+
+  res.status(201).json({ id: String(g._id) });
+});
+
+/** PATCH /api/chat/groups/:id */
+router.patch("/chat/groups/:id", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const { id } = req.params;
+
+  const group = await ChatGroup.findById(id);
+  if (!group) return res.status(404).json({ message: "Group not found" });
+
+  const isAdmin = group.adminIds.some((x: any) => String(x) === String(userId));
+  if (!isAdmin) return res.status(403).json({ message: "Only admins can edit the group" });
+
+  const { name, description, photoUrl } = req.body ?? {};
+  if (name !== undefined) group.name = name;
+  if (description !== undefined) group.description = description;
+  if (photoUrl !== undefined) group.photoUrl = photoUrl;
+
+  await group.save();
+  res.json({ id: String(group._id), name: group.name, description: group.description, photoUrl: group.photoUrl });
+});
+
+/** DELETE /api/chat/groups/:id */
+router.delete("/chat/groups/:id", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const group = await ChatGroup.findById(req.params.id);
+  if (!group) return res.status(404).json({ message: "Group not found" });
+
+  const isAdmin = group.adminIds.some((x: any) => String(x) === String(userId));
+  if (!isAdmin) return res.status(403).json({ message: "Only admins can delete the group" });
+
+  await group.deleteOne();
+  res.json({ ok: true });
 });
 
 export default router;
