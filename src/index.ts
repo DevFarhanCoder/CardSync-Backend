@@ -1,76 +1,90 @@
-import dotenv from "dotenv";
-dotenv.config();
-
+import "dotenv/config";
 import express, { ErrorRequestHandler } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import mongoose from "mongoose";
+import cookieParser from "cookie-parser";
+import path from "path";
+import fs from "fs";
 
-import requireAuth from "./middlewares/auth.js";
-
-// Routers
-import authRouter from "./routes/auth.js";          // ⬅️ your auth routes (login/register/refresh/logout)
-import usersRouter from "./routes/users.js";
+// routers you already have
+import deletionRouter from "./routes/deletion.js";
+import routes from "./routes/index.js";
+import { registerSocket } from "./socket.js";
 import cardsRouter from "./routes/cards.js";
+import requireAuth from "./middlewares/auth.js";
 import chatGroupsRouter from "./routes/chatGroups.js";
 import contactsRouter from "./routes/contacts.js";
+import usersRouter from "./routes/users.js";
 import directRouter from "./routes/direct.js";
-import deletionRouter from "./routes/deletion.js";
 
 const app = express();
 
-// trust proxy for correct secure cookies behind Render/Cloudflare
+/** behind proxy so secure cookies work on Render/HTTPS */
 app.set("trust proxy", 1);
 
-// CORS — include both apex and www
-const ALLOWED = [
-  "https://instantllycards.com",
-  "https://www.instantllycards.com",
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-];
-app.use(cors({
-  origin: (origin, cb) => (!origin || ALLOWED.includes(origin)) ? cb(null, true) : cb(new Error("Not allowed by CORS")),
-  credentials: true,
-}));
-
 app.use(express.json());
+app.use(cookieParser());
 app.use(morgan("tiny"));
-app.use("/uploads", express.static("uploads"));
+app.use(
+  cors({
+    origin: [
+      "https://instantllycards.com",
+      "https://www.instantllycards.com",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "http://localhost:5173",
+    ],
+    credentials: true,
+  })
+);
 
-// ----------------------- PUBLIC -----------------------
-app.use("/api/auth", authRouter);     // ⬅️ login must be here (no requireAuth)
+/** static uploads (and make sure folder exists) */
+const UPLOAD_DIR = path.resolve("uploads");
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+app.use("/uploads", express.static(UPLOAD_DIR));
+
+/** health */
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// ----------------------- PROTECTED --------------------
+/** mount routes (keep order stable) */
 app.use("/api/cards", requireAuth, cardsRouter);
+app.use("/api", routes);
+app.use("/api", usersRouter);
+app.use("/api/account-deletion", deletionRouter);
+app.use("/api/chat", chatGroupsRouter);
+app.use("/api", directRouter);
+app.use("/api", contactsRouter);
 
-// gate all remaining /api routes
-app.use("/api", requireAuth, usersRouter);
-app.use("/api", requireAuth, directRouter);
-app.use("/api", requireAuth, chatGroupsRouter);
-app.use("/api", requireAuth, contactsRouter);
-app.use("/api/account-deletion", requireAuth, deletionRouter);
-
-// --------------------- ERRORS -------------------------
+/** error handler */
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   console.error(err);
+  if (res.headersSent) return;
   res.status(500).json({ error: "Server error" });
 };
 app.use(errorHandler);
 
-// --------------------- START --------------------------
-(async function start() {
-  const uri = process.env.MONGODB_URI as string;
-  if (!uri) throw new Error("Missing MONGODB_URI");
-  await mongoose.connect(uri, { dbName: process.env.MONGODB_DB || undefined });
-  console.log("✅ Mongo connected");
+async function start() {
+  try {
+    const uri = process.env.MONGODB_URI as string;
+    if (!uri) throw new Error("Missing MONGODB_URI");
+    await mongoose.connect(uri, {
+      dbName: process.env.MONGODB_DB || undefined,
+    });
+    console.log("✅ Mongo connected");
 
-  const { createServer } = await import("http");
-  const server = createServer(app);
-  const { registerSocket } = await import("./socket.js");
-  registerSocket(server);
+    const http = await import("http");
+    const server = http.createServer(app);
+    registerSocket(server);
 
-  const port = Number(process.env.PORT || 8080);
-  server.listen(port, () => console.log(`🚀 API listening on :${port}`));
-})();
+    const port = Number(process.env.PORT || 8080);
+    server.listen(port, () =>
+      console.log(`🚀 API listening on http://localhost:${port}`)
+    );
+  } catch (err) {
+    console.error("❌ Failed to start server:", err);
+    process.exit(1);
+  }
+}
+
+start();
