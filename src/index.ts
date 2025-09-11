@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import usersRouter from "./routes/users.js";
 import chatGroupsRouter from "./routes/chatGroups.js";
 import analyticsRouter from "./routes/analytics.js";
+import authRouter from "./routes/auth.js";
 
 const app = express();
 
@@ -41,6 +42,7 @@ if (!mongoose.connection.readyState) {
 }
 
 /** Mount once at /api (avoid double prefixes) */
+app.use("/api", authRouter);
 app.use("/api", usersRouter);
 app.use("/api", chatGroupsRouter);
 app.use("/api", analyticsRouter);

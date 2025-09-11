@@ -31,8 +31,8 @@ router.post("/auth/login", async (req, res) => {
     if (!u) return res.status(401).json({ message: "Invalid email or password" });
 
     // If you store password hashes in u.passwordHash:
-    if (u.passwordHash) {
-      const ok = await bcrypt.compare(password || "", u.passwordHash);
+    if (u.password) {
+      const ok = await bcrypt.compare(password || "", u.password);
       if (!ok) return res.status(401).json({ message: "Invalid email or password" });
     }
 
