@@ -1,23 +1,23 @@
 import { Router, type Request, type Response } from "express";
-import * as jwt from "jsonwebtoken";
+import jwt, { type SignOptions, type Secret } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import requireAuth from "../middlewares/auth.js";
-import { User } from "../models/User.js";
+import { User, type UserDoc } from "../models/User.js";
 
 const router = Router();
 
 const PROD = process.env.NODE_ENV === "production";
-const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || ".instantllycards.com"; // or leave undefined for same-origin
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || ".instantllycards.com"; // or leave undefined
 const COOKIE_MAX = Number(process.env.JWT_COOKIE_MAX_AGE_MS || 7 * 24 * 3600 * 1000);
-const JWT_SECRET = process.env.JWT_SECRET || "";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+const JWT_SECRET = (process.env.JWT_SECRET || "") as Secret;
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "7d") as SignOptions["expiresIn"];
 
 function setAuthCookie(res: Response, token: string) {
   res.cookie("token", token, {
     httpOnly: true,
-    secure: PROD,        // must be true on HTTPS
-    sameSite: "lax",     // use "none" ONLY when truly cross-site
-    domain: COOKIE_DOMAIN, // omit if you don't need apex+www coverage
+    secure: PROD,      // true on HTTPS
+    sameSite: "lax",   // use "none" only if you're truly cross-site
+    domain: COOKIE_DOMAIN, // omit for same-origin if you want
     path: "/",
     maxAge: COOKIE_MAX,
   });
@@ -30,15 +30,12 @@ router.post("/users/login", async (req: Request, res: Response) => {
     return res.status(400).json({ message: "email and password are required" });
   }
 
-  const user = await User.findOne({ email }).exec();
-  if (!user) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
+  // select password explicitly
+  const user = await User.findOne({ email }).select("+password").exec();
+  if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) {
-    return res.status(401).json({ message: "Invalid credentials" });
-  }
+  const ok = await bcrypt.compare(password, (user as UserDoc).password);
+  if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
   const token = jwt.sign({ sub: String(user._id) }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
   setAuthCookie(res, token);
@@ -62,15 +59,15 @@ router.get("/users/me", requireAuth, async (req: Request, res: Response) => {
   const user = await User.findById((req as any).userId).lean();
   if (!user) {
     res.status(404).json({ message: "User not found" });
-    return; // <-- explicit return so TS narrows `user`
+    return;
   }
-
+  // `lean()` returns plain object; use optional chaining
   return res.json({
     id: String(user._id),
-    email: user.email,
-    name: user.name ?? "",
-    phone: user.phone ?? "",
-    about: user.about ?? "",
+    email: (user as any).email,
+    name: (user as any).name ?? "",
+    phone: (user as any).phone ?? "",
+    about: (user as any).about ?? "",
     avatarUrl: (user as any).avatarUrl ?? "",
   });
 });
@@ -92,10 +89,10 @@ router.patch("/users/me", requireAuth, async (req: Request, res: Response) => {
 
   return res.json({
     id: String(user._id),
-    email: user.email,
-    name: user.name ?? "",
-    phone: user.phone ?? "",
-    about: user.about ?? "",
+    email: (user as any).email,
+    name: (user as any).name ?? "",
+    phone: (user as any).phone ?? "",
+    about: (user as any).about ?? "",
     avatarUrl: (user as any).avatarUrl ?? "",
   });
 });
