@@ -3,11 +3,23 @@ import multer, { FileFilterCallback } from "multer";
 import path from "path";
 import fs from "fs";
 import requireAuth from "../middlewares/auth.js";
-import User  from "../models/User.js"; // your existing Mongoose user model
+import { User } from "../models/User.js"; // named export
+
+// --- Types to keep TS happy with mongoose documents ---
+import type { Document } from "mongoose";
+type UserDoc = Document & {
+  _id: any;
+  name: string;
+  email: string;
+  phone?: string;
+  about?: string;
+  avatarUrl?: string;
+  updatedAt?: Date;
+};
 
 const router = Router();
 
-/** ---------- helpers ---------- */
+/** ---------- uploads ---------- */
 const UPLOAD_DIR = path.resolve("uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -32,69 +44,82 @@ const upload = multer({
   },
 });
 
-/** ---------- current user ---------- */
+/** ---------- me (GET) ---------- */
+router.get("/users/me", requireAuth as any, async (req: any, res) => {
+  try {
+    const id = req.user.id;
 
-// get current user (auto-create if missing)
-router.get("/users/me", requireAuth, async (req: any, res) => {
-  const id = req.user.id; // set by your auth middleware
-  let u = await User.findById(id);
-  if (!u) {
-    u = await User.create({
-      _id: id,
-      name: req.user.name || "User",
-      email: req.user.email,
-      about: "",
-      phone: "",
+    let u = (await User.findById(id)) as UserDoc | null;
+    if (!u) {
+      u = (await User.create({
+        _id: id,
+        name: req.user.name || "User",
+        email: req.user.email,
+        about: "",
+        phone: "",
+        avatarUrl: "",
+      })) as UserDoc;
+    }
+
+    res.json({
+      id: String(u._id),
+      name: u.name,
+      email: u.email,
+      phone: u.phone ?? "",
+      about: u.about ?? "",
+      avatarUrl: u.avatarUrl ?? "",
+      lastActive: u.updatedAt ?? new Date(),
     });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
-  res.json({
-    id: String(u._id),
-    name: u.name,
-    email: u.email,
-    phone: u.phone || "",
-    about: u.about || "",
-    avatarUrl: u.avatarUrl || "",
-    lastActive: u.updatedAt,
-  });
 });
 
-// update current user
-router.patch("/users/me", requireAuth, async (req: any, res) => {
-  const { name, phone, about } = req.body || {};
-  const u = await User.findByIdAndUpdate(
-    req.user.id,
-    { $set: { name, phone, about } },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
-  );
-  res.json({
-    id: String(u!._id),
-    name: u!.name,
-    email: u!.email,
-    phone: u!.phone || "",
-    about: u!.about || "",
-    avatarUrl: u!.avatarUrl || "",
-    lastActive: u!.updatedAt,
-  });
+/** ---------- me (PATCH) ---------- */
+router.patch("/users/me", requireAuth as any, async (req: any, res) => {
+  try {
+    const { name, phone, about } = req.body || {};
+
+    const u = (await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { name, phone, about } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    )) as UserDoc;
+
+    res.json({
+      id: String(u._id),
+      name: u.name,
+      email: u.email,
+      phone: u.phone ?? "",
+      about: u.about ?? "",
+      avatarUrl: u.avatarUrl ?? "",
+      lastActive: u.updatedAt ?? new Date(),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-// upload avatar
+/** ---------- avatar upload ---------- */
 router.post(
   "/users/me/avatar",
-  requireAuth,
+  requireAuth as any,
   upload.single("avatar"),
   async (req: any, res) => {
     try {
       if (!req.file) return res.status(400).json({ message: "No file" });
+
       const url = `/uploads/${req.file.filename}`;
       await User.findByIdAndUpdate(req.user.id, { $set: { avatarUrl: url } });
       res.json({ url });
     } catch (err: any) {
-      if (String(err?.message || "").includes("INVALID_IMAGE_TYPE")) {
-        return res
-          .status(400)
-          .json({ message: "Only JPG/PNG/WEBP/GIF allowed" });
+      const msg = String(err?.message || "");
+      if (msg.includes("INVALID_IMAGE_TYPE")) {
+        return res.status(400).json({ message: "Only JPG/PNG/WEBP/GIF allowed" });
       }
-      if (String(err?.message || "").includes("File too large")) {
+      if (msg.includes("File too large")) {
         return res.status(413).json({ message: "Image too large (max 5MB)" });
       }
       console.error(err);
@@ -104,17 +129,23 @@ router.post(
 );
 
 /** ---------- public profile ---------- */
-router.get("/users/:id", requireAuth, async (req, res) => {
-  const u = await User.findById(req.params.id);
-  if (!u) return res.status(404).json({ message: "User not found" });
-  res.json({
-    id: String(u._id),
-    name: u.name,
-    avatarUrl: u.avatarUrl || "",
-    about: u.about || "",
-    lastActive: u.updatedAt,
-    phone: u.phone || "",
-  });
+router.get("/users/:id", requireAuth as any, async (req, res) => {
+  try {
+    const u = (await User.findById(req.params.id)) as UserDoc | null;
+    if (!u) return res.status(404).json({ message: "User not found" });
+
+    res.json({
+      id: String(u._id),
+      name: u.name,
+      avatarUrl: u.avatarUrl ?? "",
+      about: u.about ?? "",
+      phone: u.phone ?? "",
+      lastActive: u.updatedAt ?? new Date(),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 export default router;
