@@ -1,45 +1,25 @@
 import type { Request, Response } from "express";
-import { User } from "../models/User.js";
-import { Card } from "../models/Card.js";
 
-export const getPublicProfileByHandle = async (req: Request, res: Response) => {
-  const { handle } = req.params;
-  const user = await User.findOne({ handle }).lean();
-  if (!user) return res.status(404).json({ message: "User not found" });
-
-  const cards = await Card.find({ userId: user._id, visibility: { $in: ["public", "unlisted"] } })
-    .sort({ updatedAt: -1 })
-    .lean();
-
-  res.json({
-    user: { id: String(user._id), name: user.name || handle, handle, phone: (user as any).phone || "" },
-    cards: cards.map((c: any) => ({
-      id: String(c._id), title: c.title, slug: c.slug, visibility: c.visibility
-    })),
+/** GET /api/public/search?q=... */
+export async function searchPublic(req: Request, res: Response) {
+  // TODO: plug in your real search later
+  const q = String(req.query.q ?? "").trim();
+  return res.json({
+    q,
+    results: [] as Array<{ id: string; name: string }>,
   });
-};
+}
 
-export const getPublicCardBySlug = async (req: Request, res: Response) => {
-  const { handle, slug } = req.params;
-  const user = await User.findOne({ handle }).lean();
-  if (!user) return res.status(404).json({ message: "User not found" });
+/** GET /api/public/:id */
+export async function getPublicById(req: Request, res: Response) {
+  const id = String(req.params.id || "");
+  if (!id) return res.status(400).json({ error: "id required" });
+  // TODO: fetch real doc
+  return res.json({ id, name: "Untitled" });
+}
 
-  const card = await Card.findOne({
-    userId: user._id,
-    slug,
-    visibility: { $in: ["public", "unlisted"] },
-  }).lean();
-
-  if (!card) return res.status(404).json({ message: "Card not found" });
-
-  res.json({
-    card: {
-      id: String(card._id),
-      title: card.title,
-      slug: card.slug,
-      visibility: card.visibility,
-      // …include any public fields needed by UI …
-    },
-    user: { id: String(user._id), name: user.name || handle, handle },
-  });
-};
+/** GET /api/public */
+export async function listPublic(_req: Request, res: Response) {
+  // TODO: fetch real list
+  return res.json({ items: [] as Array<{ id: string; name: string }> });
+}

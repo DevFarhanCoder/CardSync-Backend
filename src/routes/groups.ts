@@ -8,6 +8,18 @@ import { requireAuth } from "../middlewares/requireAuth.js";
 const groupRouter = Router();
 groupRouter.use(requireAuth);
 
+/** GET /api/groups */
+groupRouter.get("/", requireAuth, async (_req, res) => {
+  return res.json({ groups: [] }); // plug in real groups later
+});
+
+/** POST /api/groups  (stub create) */
+groupRouter.post("/", requireAuth, async (req, res) => {
+  const { name } = (req as any).body || {};
+  if (!name) return res.status(400).json({ error: "name required" });
+  return res.json({ id: "temp-id", name });
+});
+
 /** Update group (name/description) - admin only */
 groupRouter.put("/groups/:roomId", async (req: Request, res: Response, next: NextFunction) => {
   try {

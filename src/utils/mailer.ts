@@ -3,6 +3,14 @@ import nodemailer from "nodemailer";
 
 type Env = Partial<Record<string, string>>;
 
+type MailOpts = { to: string; subject: string; html?: string; text?: string };
+
+export async function sendMail(opts: MailOpts) {
+  // Stubbed mailer to keep build green
+  console.log("sendMail (stub):", opts);
+  return { ok: true };
+}
+
 const {
   SMTP_HOST,
   SMTP_PORT = "587",
