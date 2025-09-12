@@ -1,25 +1,15 @@
 import { Router } from "express";
 import requireAuth from "../middlewares/auth.js";
-import { User } from '../models/User.js';
-import { Card } from '../models/Card.js';
-
+// import { Group } from "../models/Group.js"; // When ready
 
 const router = Router();
 
-router.get("/participants", requireAuth, async (_req: any, res) => {
-  const users = await User.find().limit(10).lean();
-  const out = users.map((u: any) => ({
-    id: String(u._id),
-    name: u.name ?? "",
-    email: u.email,
-  }));
-  res.json({ participants: out });
-});
-
-router.get("/recent-cards", requireAuth, async (req: any, res) => {
-  const cards = await Card.find({ userId: req.userId }).sort({ updatedAt: -1 }).limit(10).lean();
-  res.json({ items: cards.map((c: any) => ({ id: String(c._id), title: c.title ?? "" })) });
+// GET /api/chat/groups
+router.get("/groups", requireAuth, async (_req, res) => {
+  // Replace with actual fetch from Group when ready:
+  // const groups = await Group.find({ members: req.userId }).lean();
+  // return res.json({ groups: groups.map(g => ({ id: String(g._id), name: g.name })) });
+  return res.json({ groups: [] });
 });
 
 export default router;
- 
