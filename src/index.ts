@@ -1,42 +1,56 @@
 import "dotenv/config";
-import express, { ErrorRequestHandler } from "express";
+import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import mongoose from "mongoose";
 import cookieParser from "cookie-parser";
-import { env } from "./utils/env.js";
-import routes from "./routes/index.js";
+import mongoose from "mongoose";
+
+import usersRouter from "./routes/users.js";
+import chatGroupsRouter from "./routes/chatGroups.js";
+import analyticsRouter from "./routes/analytics.js";
+import authRouter from "./routes/auth.js";
 
 const app = express();
-app.set("trust proxy", 1);
 
-app.use(express.json());
+app.set("trust proxy", 1);
+app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 app.use(morgan("tiny"));
 
+const ORIGINS = (process.env.CORS_ORIGIN ??
+  "https://instantllycards.com,https://www.instantllycards.com,http://localhost:5173")
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: env.CORS_ORIGIN,
+    origin: ORIGINS,
     credentials: true,
   })
 );
 
-app.use("/api", routes);
-
-const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
-  console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal error" });
-};
-app.use(errorHandler);
-
-async function start() {
-  await mongoose.connect(env.MONGODB_URI);
-  app.listen(env.PORT, () => {
-    console.log(`✅ API listening on ${env.PORT}`);
-  });
+const MONGO_URI = process.env.MONGODB_URI || "";
+if (!mongoose.connection.readyState) {
+  mongoose
+    .connect(MONGO_URI)
+    .then(() => console.log("✅ Mongo connected"))
+    .catch(err => {
+      console.error("Mongo error", err);
+      process.exit(1);
+    });
 }
 
-start().catch((e) => {
-  console.error("Boot error:", e);
-  process.exit(1);
-});
+/** Mount once at /api (avoid double prefixes) */
+app.use("/api", authRouter);
+app.use("/api", usersRouter);
+app.use("/api", chatGroupsRouter);
+app.use("/api", analyticsRouter);
+
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+app.use("/api", (_req, res) => res.status(404).json({ message: "Not Found" }));
+
+const PORT = Number(process.env.PORT || 8080);
+app.listen(PORT, () => console.log(`🚀 API on :${PORT}`));
+
+export default app;

@@ -1,22 +1,17 @@
 import type { Request, Response, NextFunction } from "express";
 import * as jwt from "jsonwebtoken";
-import { env } from "../utils/env.js";
 
-export interface AuthedRequest extends Request {
-  userId?: string;
-}
+const JWT_SECRET = process.env.JWT_SECRET || "";
 
-export default function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+export default function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const token = req.cookies?.token;
+  if (!token) return res.status(401).json({ message: "Unauthorized: no token" });
+
   try {
-    const token = req.cookies?.token;
-    if (!token) return res.status(401).json({ error: "Not authenticated" });
-
-    const decoded = jwt.verify(token, env.JWT_SECRET) as any;
-    req.userId = decoded?.sub as string;
-    if (!req.userId) return res.status(401).json({ error: "Bad token" });
-
+    const payload = jwt.verify(token, JWT_SECRET) as { sub: string };
+    (req as any).userId = payload.sub;
     next();
-  } catch (_e) {
-    return res.status(401).json({ error: "Invalid token" });
+  } catch {
+    return res.status(401).json({ message: "Unauthorized: bad token" });
   }
 }

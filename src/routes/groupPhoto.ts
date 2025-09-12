@@ -21,12 +21,6 @@ const upload = multer({
 
 const router = Router();
 
-router.post("/", requireAuth, async (req, res) => {
-  const { imageUrl } = (req as any).body || {};
-  // TODO: store imageUrl or handle later
-  return res.json({ ok: true, imageUrl: imageUrl || "" });
-});
-
 router.post(
   "/groups/:roomId/photo",
   requireAuth,

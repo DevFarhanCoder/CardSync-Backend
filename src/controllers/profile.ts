@@ -1,51 +1,31 @@
-import type { Response } from "express";
-import { AuthedRequest } from "../middlewares/auth.js";
-import { User } from "../models/User.js";
+import type { Request, Response } from "express";
+import { User } from '../models/User.js';
 
-/** GET /api/profile (or /api/users/me) */
-export async function getProfile(req: AuthedRequest, res: Response) {
-  try {
-    const userId = (req as any).userId;
-    const doc = await User.findById(userId).lean().exec(); // <- single doc, not array
-    if (!doc) return res.status(404).json({ error: "User not found" });
-    const u: any = doc;
+/** GET /api/profile/me */
+export const getMe = async (req: Request & { userId?: string }, res: Response) => {
+  if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
+  const user = await User.findById(req.userId).lean();
+  if (!user) return res.status(404).json({ message: "User not found" });
+  res.json({
+    user: {
+      _id: user._id,
+      email: user.email,
+      name: user.name ?? "",
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    },
+  });
+};
 
-    return res.json({
-      id: String(u?._id ?? ""),
-      email: u?.email ?? "",
-      name: u?.name ?? "",
-      createdAt: u?.createdAt ?? null,
-      updatedAt: u?.updatedAt ?? null,
-    });
-  } catch {
-    return res.status(500).json({ error: "Internal error" });
-  }
-}
+/** PATCH /api/profile */
+export const updateMe = async (req: Request & { userId?: string }, res: Response) => {
+  if (!req.userId) return res.status(401).json({ message: "Unauthorized" });
+  const payload = req.body as Partial<{ name: string }>;
+  const user = await User.findByIdAndUpdate(req.userId, { $set: payload }, { new: true }).lean();
+  if (!user) return res.status(404).json({ message: "User not found" });
+  res.json({ user: { _id: user._id, email: user.email, name: user.name ?? "" } });
+};
 
-/** PATCH /api/profile (or /api/users/me) */
-export async function updateProfile(req: AuthedRequest, res: Response) {
-  try {
-    const userId = (req as any).userId;
-    const body: any = (req as any).body ?? {};
-    const update: any = {};
-    if (body.name !== undefined) update.name = body.name;
-
-    const doc = await User.findByIdAndUpdate(userId, update, { new: true }).lean().exec();
-    if (!doc) return res.status(404).json({ error: "User not found" });
-    const u: any = doc;
-
-    return res.json({
-      id: String(u?._id ?? ""),
-      email: u?.email ?? "",
-      name: u?.name ?? "",
-      createdAt: u?.createdAt ?? null,
-      updatedAt: u?.updatedAt ?? null,
-    });
-  } catch {
-    return res.status(500).json({ error: "Internal error" });
-  }
-}
-
-/* Aliases for routes that expect these names */
-export const me = getProfile;
-export const updateMe = updateProfile;
+/** Aliases to match routes that expect getProfile/updateProfile */
+export const getProfile = getMe;
+export const updateProfile = updateMe;

@@ -1,7 +1,7 @@
 import { Server } from "socket.io";
 import type { Server as HTTPServer } from "http";
 
-export function registerSocket(server: HTTPServer, _server: any) {
+export function registerSocket(server: HTTPServer) {
   const io = new Server(server, { cors: { origin: "*", methods: ["GET","POST"] } });
 
   io.on("connection", (socket) => {

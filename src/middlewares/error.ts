@@ -1,7 +1,11 @@
-import type { ErrorRequestHandler } from "express";
+import type { NextFunction, Request, Response } from 'express';
+import { ZodError } from 'zod';
+import { logger } from '../utils/logger.js';
 
-export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
-  console.error("Unhandled error:", err);
-  const status = typeof err?.status === "number" ? err.status : 500;
-  res.status(status).json({ error: err?.message || "Internal error" });
-};
+export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction) {
+  if (err instanceof ZodError) {
+    return res.status(400).json({ error: 'ValidationError', details: err.errors });
+  }
+  logger.error('UnhandledError', err);
+  return res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+}
